@@ -235,11 +235,111 @@ prorated $5.84M YTD target, +8.9% YoY); Nigeria YTD is $3.97M (102% of a
 prorated $3.89M YTD target, -3.9% YoY) — a believable mixed picture, not
 everything trending the same direction.
 
-**Still open:** the `budget_revenue`/`budget_ebit` columns in the Finance
-tab are still the old noise-around-actual version — turning them into a
-genuine, independent monthly plan (a flat split of the real annual target)
-is the next thing to fix, now that the fiscal year framing underneath it
-is correct.
+**Superseded by 2.2 below:** the plan to fix `budget_revenue`/`budget_ebit`
+with a flat monthly split turned into something bigger — a real financial
+model, described next.
+
+### 2.2 — Building a real 2025-2026 financial model
+
+You pointed out the actual real-world gap: in a live version of this
+project, Finance would build and approve a budget *before* the year
+starts — a real financial model, not a formula guessing at "revenue plus
+some noise." You offered your real Be Girl financial model as a
+structural template to build Lumin Light's version from.
+
+**Handling the real template safely.** The project's hard rule is that no
+real Be Girl data can ever end up in this repo, which is meant to go
+public. Before touching the file: gitignored it immediately
+(`Be Girl*.xlsx`) so it could never accidentally get committed, confirmed
+it was still untracked, then only read its *structure* — tab names, the
+Revenue → COGS → Gross Profit → Opex → EBITDA → EBIT flow, how Cash Flow
+rolls forward month to month. One tab (Salaries) had real named
+employees and real compensation — that entire concept (a named roster)
+was rebuilt from scratch with invented generic role titles and invented
+numbers, nothing carried over. You said you'd delete the real template
+from this folder once the Lumin Light version existed.
+
+**Scope decisions, made together before building anything:**
+- 2025's budget set close to (not identical to) what Sales actually
+  achieved that year — see 2.3 below for how this ended up becoming an
+  exact match instead.
+- Opex kept to 7 top-level categories (Salaries & Benefits, Sales
+  Commission, Rent, Travel, Professional Services, Marketing, Freight &
+  Logistics, G&A/Admin) rather than the template's much deeper
+  sub-category breakdown — matches a 20-person company's actual
+  complexity.
+- A real ~20-role headcount roster (generic titles, invented comp) drives
+  the Salaries line bottom-up, rather than a single flat number.
+- The P&L stops at EBIT — no interest/tax/net income below it, since
+  that's all the dashboard actually needs.
+- Skipped rebuilding the template's unit-level "Sales Forecast" tabs
+  (where a real sales team would input their own unit-by-unit
+  projections) — Lumin Light's *actual* side already has that unit
+  detail in the Sales tab; the model only needs to produce monthly $
+  figures for the dashboard to compare against.
+
+**A margin mistake caught by asking "wouldn't gross margin just be
+revenue minus COGS?"** First pass used 39.6% — the *average of the five
+products' margin percentages*. That's wrong: it treats Sol 5 (rare, but
+up to $1M a deal) as equally important as Sol 1 (common, ~$8/unit) just
+because they're each "one of five products." The correct blended margin
+weights by *revenue*, not by product count — mathematically identical to
+(Total Revenue − Total COGS) / Total Revenue, which is the actual
+definition. That works out to 44.5%, which also matches what the real
+generated Sales data shows (46-49% realized) far better than 39.6% did.
+
+**The result:** a 6-tab workbook (Assumptions, Headcount, USA PL, Nigeria
+PL, Consolidated PL, Cash Flow) — every number an editable input on the
+Assumptions or Headcount tab, everything else a formula. No intercompany
+elimination line (unlike the real Be Girl model, where Mozambique buys
+from the US entity at a markup) — Lumin's two subsidiaries both buy
+directly from an external supplier at the same price, so Consolidated is
+a straight sum of the two subsidiary P&Ls. 2025 budget: $12.95M revenue,
+10.0% EBIT margin. 2026 budget: $15.0M revenue, 13.4% EBIT margin — the
+margin *expansion* wasn't forced; it falls out naturally because most
+Opex is fixed/headcount-driven while revenue grows ~16%.
+
+One real finding from the build: USA and Nigeria have very different
+margin profiles standalone — USA's 2025 EBIT margin is a thin 3.3%
+(13 of the 20 roles, and the priciest ones, sit in USA) versus Nigeria's
+20.2%. Not a mistake — a believable "HQ absorbs the overhead" story — but
+worth knowing before someone looks at the dashboard and asks about it.
+
+**Verifying the formulas actually work.** openpyxl writes formulas as
+text with no computed values — nothing is "real" until something
+actually executes them. Checking that required LibreOffice (a free
+Excel-equivalent that can run headless and force a full recalculation),
+which wasn't installed. You installed it yourself by downloading straight
+from libreoffice.org rather than going through Homebrew — simpler, no
+terminal work needed. Recalculating then confirmed all 1,874 formulas in
+the workbook evaluate with zero errors, and the computed totals matched
+hand-calculated expectations exactly.
+
+### 2.3 — Making the financial model the actual source of truth
+
+You asked whether 2025's Sales actuals could be made to match the
+financial model exactly, with the model as the authority — not just
+"close," which is what 2.2 originally produced (+3.3% actual over
+budget). Two changes:
+
+1. **`config.py` no longer hardcodes revenue targets.** It now opens the
+   financial model workbook at import time and reads the 2025 and 2026
+   figures straight from its Assumptions tab. If the model's numbers
+   ever change, regenerating data picks up the new targets automatically
+   — nothing to keep in sync by hand, the exact failure mode already
+   fixed once for Sales/Finance (see 1.3) and avoided here from the start.
+2. **2025's Closed Won deals get rescaled to hit the target exactly**
+   (not just "at least" the target, which is what generates the natural
+   overshoot for 2026). This only happens for the *prior* period — 2025
+   is complete and settled, so its actual revenue should tie to the
+   approved budget precisely. 2026 deliberately keeps its natural
+   variance, since the year is still unfolding and a real "are we on
+   pace" comparison needs room to move.
+
+Confirmed after rerunning the generators: 2025 Sales actual revenue now
+equals the financial model's 2025 budget to the penny, for both
+subsidiaries. Finance and Inventory, which both derive from Sales,
+regenerated cleanly on top of that with no other changes needed.
 
 ---
 
