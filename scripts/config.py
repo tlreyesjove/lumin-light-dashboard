@@ -92,16 +92,16 @@ PRODUCTS = {
 # ---------------------------------------------------------------------------
 # Sales pipeline
 # ---------------------------------------------------------------------------
-# Standard CRM stage -> win probability convention.
+# Stage only applies to OPEN deals — mutually exclusive with status
+# (Won/Lost deals have no stage; that's what status is for). Each stage's
+# win probability, per Tatiana:
 STAGE_PROBABILITY = {
     "Prospecting": 0.10,
-    "Qualification": 0.25,
+    "Qualification": 0.10,
     "Proposal": 0.50,
-    "Negotiation": 0.75,
-    "Closed Won": 1.00,
-    "Closed Lost": 0.00,
+    "Negotiation": 0.90,
 }
-OPEN_STAGES = ["Prospecting", "Qualification", "Proposal", "Negotiation"]
+OPEN_STAGES = list(STAGE_PROBABILITY)
 
 # Closed Won deals are generated per subsidiary/period by drawing deals
 # until their cumulative value reaches a target (see generate_sales.py) —

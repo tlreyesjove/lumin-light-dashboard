@@ -108,29 +108,27 @@ def generate_deal(deal_id, period, subsidiary=None):
     cycle_low, cycle_high = config.SALES_CYCLE_DAYS[buyer_type]
     cycle_days = random.randint(cycle_low, cycle_high)
 
-    if period == "prior":
-        span_days = (config.PRIOR_PERIOD_END - config.PRIOR_PERIOD_START).days
-        actual_close_date = config.PRIOR_PERIOD_START + datetime.timedelta(days=random.randint(0, span_days))
+    if period in ("prior", "current"):
+        period_start, period_end = {
+            "prior": (config.PRIOR_PERIOD_START, config.PRIOR_PERIOD_END),
+            "current": (config.CURRENT_PERIOD_START, config.TODAY),
+        }[period]
+        span_days = (period_end - period_start).days
+        actual_close_date = period_start + datetime.timedelta(days=random.randint(0, span_days))
         created_date = actual_close_date - datetime.timedelta(days=cycle_days)
-        won = random.random() < win_rate_for(buyer_type)
-        stage = "Closed Won" if won else "Closed Lost"
         expected_close_date = actual_close_date
-    elif period == "current":
-        span_days = (config.TODAY - config.CURRENT_PERIOD_START).days
-        actual_close_date = config.CURRENT_PERIOD_START + datetime.timedelta(days=random.randint(0, span_days))
-        created_date = actual_close_date - datetime.timedelta(days=cycle_days)
         won = random.random() < win_rate_for(buyer_type)
-        stage = "Closed Won" if won else "Closed Lost"
-        expected_close_date = actual_close_date
+        status = "Won" if won else "Lost"
+        stage = ""  # closed deals have no stage — status (Won/Lost) covers that
+        probability = 1.0 if won else 0.0
     else:
         days_elapsed = random.randint(5, cycle_days)
         created_date = config.TODAY - datetime.timedelta(days=days_elapsed)
         expected_close_date = created_date + datetime.timedelta(days=cycle_days)
         actual_close_date = None
+        status = "Open"
         stage = stage_from_progress(days_elapsed / cycle_days)
-
-    probability = config.STAGE_PROBABILITY[stage]
-    status = {"Closed Won": "Won", "Closed Lost": "Lost"}.get(stage, "Open")
+        probability = config.STAGE_PROBABILITY[stage]
 
     return {
         "deal_id": f"DEAL-{deal_id:04d}",
