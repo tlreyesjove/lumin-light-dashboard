@@ -150,9 +150,17 @@ def generate_deal(deal_id, period, subsidiary=None):
     }
 
 
-def generate_closed_deals_toward_target(deal_id, period, subsidiary, target_revenue):
+def generate_closed_deals_toward_target(deal_id, period, subsidiary, target_revenue, exact_match=False):
     """Keep generating deals (a realistic win/lose mix) for one subsidiary/period
-    until Closed Won value reaches target_revenue. Returns (deals, next_deal_id)."""
+    until Closed Won value reaches target_revenue. Returns (deals, next_deal_id).
+
+    exact_match=True rescales the Won deals afterward so the total lands
+    exactly on target_revenue, instead of just overshooting it by however
+    much the last deal happened to add. Used for the "prior" (2025) period
+    only: 2025 is a settled, complete year, and Tatiana wants it to tie out
+    exactly to the financial model's 2025 budget, not just land close.
+    "current" (2026) deliberately keeps the natural overshoot/variance —
+    the year isn't over yet, so actual-vs-budget SHOULD show real movement."""
     deals = []
     won_total = 0.0
     while won_total < target_revenue:
@@ -161,6 +169,24 @@ def generate_closed_deals_toward_target(deal_id, period, subsidiary, target_reve
         deal_id += 1
         if deal["status"] == "Won":
             won_total += deal["deal_value"]
+
+    if exact_match and won_total != target_revenue:
+        won_deals = [d for d in deals if d["status"] == "Won"]
+        scale = target_revenue / won_total
+        rescaled_total = 0.0
+        for d in won_deals:
+            d["deal_value"] = round(d["deal_value"] * scale, 2)
+            d["quantity"] = max(1, round(d["deal_value"] / d["unit_price"]))
+            d["weighted_value"] = d["deal_value"]  # probability is 1.0 for Won
+            rescaled_total += d["deal_value"]
+        # Rounding each deal to the cent leaves a tiny residual — plug it into
+        # the last deal so the total ties out exactly, not just approximately.
+        residual = round(target_revenue - rescaled_total, 2)
+        last = won_deals[-1]
+        last["deal_value"] = round(last["deal_value"] + residual, 2)
+        last["quantity"] = max(1, round(last["deal_value"] / last["unit_price"]))
+        last["weighted_value"] = last["deal_value"]
+
     return deals, deal_id
 
 
@@ -179,9 +205,9 @@ def generate_sales_data():
 
     for subsidiary in config.SUBSIDIARIES:
         current_target = config.ANNUAL_REVENUE_TARGET[subsidiary] * ytd_fraction
-        prior_target = config.ANNUAL_REVENUE_TARGET[subsidiary] * config.PRIOR_PERIOD_REVENUE_FACTOR
+        prior_target = config.PRIOR_PERIOD_REVENUE_TARGET[subsidiary]
 
-        prior_deals, deal_id = generate_closed_deals_toward_target(deal_id, "prior", subsidiary, prior_target)
+        prior_deals, deal_id = generate_closed_deals_toward_target(deal_id, "prior", subsidiary, prior_target, exact_match=True)
         deals.extend(prior_deals)
 
         current_deals, deal_id = generate_closed_deals_toward_target(deal_id, "current", subsidiary, current_target)

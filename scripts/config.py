@@ -7,6 +7,28 @@ and re-run the generator scripts; nothing else needs to change.
 """
 
 import datetime
+import os
+import openpyxl
+
+# ---------------------------------------------------------------------------
+# Revenue targets — read directly from the financial model, not duplicated
+# here. The financial model (Assumptions tab) is the single source of truth
+# for what Lumin Light budgeted each year; if it changes, regenerating data
+# picks up the new numbers automatically instead of silently drifting apart.
+# ---------------------------------------------------------------------------
+_MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "Lumin Light Financial Model - 2025-2026.xlsx")
+
+
+def _read_revenue_targets():
+    wb = openpyxl.load_workbook(_MODEL_PATH, data_only=True)
+    ws = wb["Assumptions"]
+    return {
+        2025: {"Lumin Light USA": ws["C6"].value, "Lumin Light Nigeria": ws["C7"].value},
+        2026: {"Lumin Light USA": ws["D6"].value, "Lumin Light Nigeria": ws["D7"].value},
+    }
+
+
+_REVENUE_TARGETS = _read_revenue_targets()
 
 # ---------------------------------------------------------------------------
 # Time window
@@ -30,12 +52,15 @@ PRIOR_PERIOD_END = datetime.date(2025, 12, 31)
 # ---------------------------------------------------------------------------
 SUBSIDIARIES = ["Lumin Light USA", "Lumin Light Nigeria"]
 
-# Annual revenue target split (current period). USA skews higher — HQ,
-# holds more of the large multilateral/government relationships.
-ANNUAL_REVENUE_TARGET = {
-    "Lumin Light USA": 9_000_000,
-    "Lumin Light Nigeria": 6_000_000,
-}
+# Revenue targets, from the financial model (see _read_revenue_targets above).
+# USA skews higher — HQ, holds more of the large multilateral/government
+# relationships. 2026 = current fiscal year target; 2025 = prior fiscal
+# year's budget, which the "prior" period's Closed Won deals are scaled to
+# match exactly (see generate_sales.py) — 2025 is a settled, complete year,
+# so Sales' actual revenue and the financial model's budget for that year
+# should tie out precisely, not just land in the same neighborhood.
+ANNUAL_REVENUE_TARGET = _REVENUE_TARGETS[2026]
+PRIOR_PERIOD_REVENUE_TARGET = _REVENUE_TARGETS[2025]
 TOTAL_REVENUE_TARGET = sum(ANNUAL_REVENUE_TARGET.values())  # $15M
 
 WAREHOUSES = {
@@ -115,11 +140,6 @@ OPEN_STAGES = list(STAGE_PROBABILITY)
 # deal-by-deal randomness (product, buyer, exact value) while controlling
 # the metric that actually matters (period revenue, and the growth
 # between periods).
-#
-# Prior-period target as a fraction of current — this is what produces
-# "revenue growth vs. prior period," not a separately-invented growth rate.
-PRIOR_PERIOD_REVENUE_FACTOR = 0.87
-
 OPEN_DEALS = 90
 
 # Base win rate for a closed deal; nudged up/down per buyer type below.

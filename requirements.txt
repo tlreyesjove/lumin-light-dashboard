@@ -3,3 +3,4 @@ numpy
 gspread
 google-auth
 python-dotenv
+openpyxl
