@@ -21,8 +21,8 @@ def main():
     os.makedirs(DATA_DIR, exist_ok=True)
 
     sales_df = generate_sales_data()
-    finance_df = generate_finance_data(sales_df)  # derived from sales_df, not independent
-    inventory_df = generate_inventory_data()
+    finance_df = generate_finance_data(sales_df)      # derived from sales_df, not independent
+    inventory_df = generate_inventory_data(sales_df)  # demand stats derived from sales_df too
 
     sales_df.to_csv(os.path.join(DATA_DIR, "sales.csv"), index=False)
     finance_df.to_csv(os.path.join(DATA_DIR, "finance.csv"), index=False)

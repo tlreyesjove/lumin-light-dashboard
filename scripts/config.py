@@ -150,10 +150,12 @@ BUDGET_VARIANCE_PCT = 0.10
 # ---------------------------------------------------------------------------
 # Inventory
 # ---------------------------------------------------------------------------
-# Reorder point = this many days of trailing average demand, held as safety
-# stock. Static per-product/warehouse baseline — the *pipeline-aware* alert
-# logic (factoring in weighted pipeline demand) is dashboard logic (Phase 3),
-# not something baked into the raw data.
-REORDER_DAYS_OF_COVER = 45
+# Lead time = how long it takes to receive a replenishment order (e.g. an
+# order of ~100,000 units) after placing it. Tatiana's assumption: 1 month,
+# same for average and worst case. Kept as two separate constants (not one)
+# so this still works if avg/max lead time ever need to diverge — e.g. the
+# Nigeria warehouse taking longer on a bad shipping month than usual.
+AVG_LEAD_TIME_MONTHS = 1
+MAX_LEAD_TIME_MONTHS = 1
 
 RANDOM_SEED = 42

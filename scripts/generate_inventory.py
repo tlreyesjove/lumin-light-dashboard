@@ -3,12 +3,26 @@ Generates the Inventory tab: one row per (product, warehouse).
 
 Design notes:
 
-- reorder_point is a static safety-stock threshold: expected daily unit
-  demand for that product/subsidiary x REORDER_DAYS_OF_COVER. Expected
-  demand comes from the same assumptions used in generate_sales.py
-  (revenue target x product selection_weight, divided by unit price) —
-  so Inventory and Sales are built from the same underlying story rather
-  than being independently made up.
+- avg_monthly_demand_units and max_monthly_demand_units are calculated
+  from the ACTUAL Closed Won deals in sales.csv over the current 12-month
+  period (grouped by month, product, subsidiary) — not an independent
+  estimate. Same reconciliation principle as the Finance fix: Inventory's
+  idea of "demand" should be traceable back to Sales, not separately made up.
+  Months with no closed deals for a product count as zero units that
+  month (they still pull the average down — a real slow month would too).
+
+- Safety stock and reorder point use Tatiana's formulas:
+
+      Safety Stock  = (Max Monthly Demand x Max Lead Time)
+                       - (Avg Monthly Demand x Avg Lead Time)
+      Reorder Point = (Avg Monthly Demand x Avg Lead Time) + Safety Stock
+
+  With AVG_LEAD_TIME_MONTHS = MAX_LEAD_TIME_MONTHS = 1 (config.py), this
+  simplifies to Reorder Point = Max Monthly Demand — i.e. "always hold
+  enough stock to cover the busiest month you've actually seen." The
+  formula is still written out in full (not hardcoded to that
+  simplification) so it keeps working correctly if avg/max lead time
+  are ever set to different values.
 
 - stock_on_hand is reorder_point x a random multiplier, deliberately
   skewed so most rows are comfortably stocked but a few sit below or
@@ -23,10 +37,12 @@ Design notes:
   This tab just provides the raw stock/threshold numbers.
 """
 
+import datetime
 import numpy as np
 import pandas as pd
 
 import config
+from generate_sales import generate_sales_data
 
 rng = np.random.default_rng(config.RANDOM_SEED + 1)
 
@@ -48,18 +64,60 @@ def sample_stock_multiplier():
     return rng.uniform(*STOCK_LEVEL_BUCKETS[-1][1])
 
 
-def generate_inventory_data():
-    period_days = (config.CURRENT_PERIOD_END - config.CURRENT_PERIOD_START).days + 1
+def current_period_months():
+    months = []
+    y, m = config.CURRENT_PERIOD_START.year, config.CURRENT_PERIOD_START.month
+    end_y, end_m = config.CURRENT_PERIOD_END.year, config.CURRENT_PERIOD_END.month
+    while (y, m) <= (end_y, end_m):
+        months.append(f"{y:04d}-{m:02d}")
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    return months
+
+
+def monthly_demand_stats(sales_df):
+    """Returns {(subsidiary, product): {'avg': x, 'max': y}} units/month,
+    over the current 12-month period, from actual Closed Won deals."""
+    months = current_period_months()
+
+    won = sales_df[sales_df.stage == "Closed Won"].copy()
+    won["month"] = pd.to_datetime(won["actual_close_date"]).dt.strftime("%Y-%m")
+    won = won[won["month"].isin(months)]
+
+    grouped = won.groupby(["subsidiary", "product", "month"])["quantity"].sum()
+
+    stats = {}
+    for subsidiary in config.SUBSIDIARIES:
+        for product in config.PRODUCTS:
+            monthly_units = [grouped.get((subsidiary, product, m), 0) for m in months]
+            stats[(subsidiary, product)] = {
+                "avg": sum(monthly_units) / len(months),
+                "max": max(monthly_units),
+            }
+    return stats
+
+
+def generate_inventory_data(sales_df=None):
+    if sales_df is None:
+        sales_df = generate_sales_data()
+
+    demand_stats = monthly_demand_stats(sales_df)
 
     rows = []
     for subsidiary in config.SUBSIDIARIES:
         warehouse = config.WAREHOUSES[subsidiary]["warehouse"]
-        for product, spec in config.PRODUCTS.items():
-            expected_annual_revenue = config.ANNUAL_REVENUE_TARGET[subsidiary] * spec["selection_weight"]
-            expected_annual_units = expected_annual_revenue / spec["unit_price"]
-            daily_demand_units = expected_annual_units / period_days
+        for product in config.PRODUCTS:
+            avg_monthly_demand = demand_stats[(subsidiary, product)]["avg"]
+            max_monthly_demand = demand_stats[(subsidiary, product)]["max"]
 
-            reorder_point = round(daily_demand_units * config.REORDER_DAYS_OF_COVER)
+            safety_stock = (max_monthly_demand * config.MAX_LEAD_TIME_MONTHS) - \
+                            (avg_monthly_demand * config.AVG_LEAD_TIME_MONTHS)
+            safety_stock = max(0.0, safety_stock)  # can't hold negative safety stock
+            reorder_point = (avg_monthly_demand * config.AVG_LEAD_TIME_MONTHS) + safety_stock
+
+            reorder_point = round(reorder_point)
             stock_on_hand = round(reorder_point * sample_stock_multiplier())
 
             rows.append({
@@ -67,8 +125,10 @@ def generate_inventory_data():
                 "subsidiary": subsidiary,
                 "product": product,
                 "stock_on_hand": stock_on_hand,
+                "avg_monthly_demand_units": round(avg_monthly_demand, 1),
+                "max_monthly_demand_units": round(max_monthly_demand, 1),
+                "safety_stock": round(safety_stock),
                 "reorder_point": reorder_point,
-                "avg_daily_demand_units": round(daily_demand_units, 1),
                 "as_of_date": config.TODAY.isoformat(),
             })
 
@@ -77,7 +137,8 @@ def generate_inventory_data():
 
 
 if __name__ == "__main__":
-    df = generate_inventory_data()
+    sales_df = generate_sales_data()
+    df = generate_inventory_data(sales_df)
     print(df.to_string())
     below = df[df.stock_on_hand < df.reorder_point]
-    print(f"\n{len(below)} of {len(df)} rows below static reorder point")
+    print(f"\n{len(below)} of {len(df)} rows below reorder point")
