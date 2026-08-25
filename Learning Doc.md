@@ -399,4 +399,107 @@ instead.
 
 ## Phase 3: The Streamlit App
 
-*Not started yet.*
+### 3.1 — Building the app
+
+Three tabs (Sales / Finance / Inventory, your call over a single scrolling
+page), styled with the brand guide's actual colors and Inter typeface.
+Structure:
+
+- `app.py` — entry point: page config, header, the Refresh button, tabs.
+- `dashboard/data.py` — the only place that talks to Google Sheets.
+  Two different caches, deliberately separate: the connection itself
+  (`st.cache_resource`, never expires — expensive to set up, safe to
+  reuse) versus the actual data (`st.cache_data`, cleared by the Refresh
+  button). Without that split, "Refresh" would have no way to know the
+  difference between "reconnect" and "re-pull the numbers."
+- `dashboard/styling.py` — every color pulled from `Lumin Light Brand
+  Guide.html`, not invented here. Two small palette decisions worth
+  noting: Sol 1-5 use a single blue ramp (light to dark, ending at Navy
+  Primary itself for Sol 5) since they're a real ordinal tier sequence —
+  but the four buyer types get four genuinely distinct hues instead,
+  since there's no inherent order among Government/Distributor/NGO/
+  Multilateral. Status colors (green/amber/red) stay reserved for
+  Inventory alerts only, per the brand guide's explicit rule.
+- `dashboard/sales.py`, `finance.py`, `inventory.py` — one module per
+  pillar.
+
+**"Today" is the data's own snapshot date, not your computer's clock.**
+`app.py` reads it from Inventory's `as_of_date` column rather than calling
+the real system date. This data was generated once, as of a specific day
+— if the app used the live clock instead, "deals closing this quarter"
+and similar time-relative metrics would silently drift out of sync with
+what the data actually reflects the moment this is opened on a different
+day (which, for a deployed dashboard, could be months later).
+
+**The "target" numbers don't live in this project's Python code.** Sales'
+"% of annual target" is calculated by summing Finance's `budget_revenue`
+column — not by importing `scripts/config.py` or reading the financial
+model directly. That's a deliberate architecture choice, not laziness:
+the whole point of the Google Sheet is that it's the *only* thing the
+dashboard reads from, mirroring how a real deployed version would have no
+access to the source systems (QBO, the CRM, the financial model) at all —
+only to what those systems already pushed into the Sheet.
+
+### 3.2 — A real gap found while testing against the live Sheet
+
+Building the Finance tab's "EBIT vs. full-year budget" metric (see 2.4)
+surfaced a genuine data-model problem, not just a dashboard bug: the
+Finance tab only had rows through today, so there was literally no way to
+read "the full year's budget" without the dashboard reaching outside the
+Sheet — which would have broken the "dashboard only reads the Sheet"
+architecture we'd just agreed was the correct real-world pattern.
+
+The fix belonged in the data itself, not the dashboard: `generate_finance.py`
+now creates rows for the WHOLE fiscal year, immediately. Budget columns
+are populated for all 12 months from day one — exactly how a real annual
+budget actually works, existing in full before any of the year's actuals
+happen. Actual columns (`revenue`, `cogs`, `opex`, `ebit`, `cash_balance`)
+stay blank for months that haven't happened yet — genuinely unknown, not
+zero. Getting this distinction right mattered downstream too: an early
+version of the "Actual vs. Budget" chart showed the Actual line crashing
+to zero after August instead of just stopping, because pandas'
+`.groupby().sum()` treats an all-blank group as 0 by default — fixed with
+`min_count=1`, which keeps a genuinely-unknown group as blank instead.
+
+### 3.3 — A real bug: the pipeline-aware reorder alert was silently broken
+
+While building the Inventory tab's alert logic (see the module's own
+docstring for the full formula), the "Warning" tier consistently showed
+zero — a red flag, since a portfolio of realistic products/deals should
+turn up at least a few borderline cases by chance. Manually recomputing
+one row by hand in a Python shell caught it: the code wrote
+`open_deals.product == product`, using **attribute access** to reach the
+"product" column. But pandas DataFrames have a *built-in method* called
+`.product()` (computes a product of values) — attribute access finds that
+method first and silently shadows the column of the same name. The
+comparison was quietly evaluating "is this bound method object equal to
+this string," which is always `False` — so the pipeline filter matched
+nothing, ever, for any product, and the whole pipeline-aware calculation
+had been computing zero demand for every single row without raising an
+error anywhere. Fixed by switching to bracket notation
+(`open_deals["product"]`), which always means "the column," never a
+method. **General lesson worth keeping:** in pandas, bracket notation
+(`df["column"]`) is the safe default for column access; attribute access
+(`df.column`) is a convenience that quietly breaks for any column whose
+name collides with a real DataFrame method or attribute (`product`,
+`count`, `sum`, `min`, `max`, `T`, `mode`, and others) — and the failure
+mode isn't a crash, it's a wrong answer that looks like a legitimate
+result.
+
+Fixing that bug changed the actual demo data in a good way: instead of 0
+Warning-tier rows, a rerun turned up 3 Critical / 3 Warning / 4 Healthy —
+including Sol 1 in Houston, whose stock (44,806 units) sits comfortably
+above its static reorder point (32,600) and would look completely fine on
+a naive check, but drops to a Warning once near-term pipeline demand is
+factored in. That's the exact scenario the spec describes as the reason
+this metric exists.
+
+One more refinement made alongside the bug fix: the pipeline calculation
+originally summed *every* open deal for a product, regardless of how far
+out its expected close date was. That over-counts risk — a deal that
+won't close for 8 months shouldn't trigger an urgent reorder flag today,
+since there's plenty of time for a normal restock before it could
+possibly close. Now only deals expected to close within
+`REORDER_LOOKAHEAD_MONTHS` (1 month — matching `AVG_LEAD_TIME_MONTHS`,
+the same lead-time assumption `reorder_point` itself is built on) count
+toward the alert.
