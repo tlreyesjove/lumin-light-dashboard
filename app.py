@@ -47,10 +47,31 @@ as_of = pd.to_datetime(inventory_df["as_of_date"].max())
 
 render_header(f"Data as of {as_of.strftime('%B %-d, %Y')}")
 
+# Entity selector — one shared control (not repeated per tab) so a choice
+# made on one tab carries over to the others. "Lumin Group Consolidated"
+# means no filter at all (both subsidiaries combined); the other two
+# options filter every dataframe down to just that subsidiary before any
+# tab ever sees it, so no per-tab code needs to know the selector exists.
+CONSOLIDATED_LABEL = "Lumin Group Consolidated"
+entity = st.segmented_control(
+    "Entity", options=[CONSOLIDATED_LABEL, "Lumin Light USA", "Lumin Light Nigeria"],
+    default=CONSOLIDATED_LABEL, label_visibility="collapsed",
+)
+entity = entity or CONSOLIDATED_LABEL  # segmented_control can return None if de-selected
+
+
+def filter_by_entity(df):
+    if entity == CONSOLIDATED_LABEL:
+        return df
+    return df[df.subsidiary == entity]
+
+
+sales_df, finance_df, inventory_df = filter_by_entity(sales_df), filter_by_entity(finance_df), filter_by_entity(inventory_df)
+
 tab_sales, tab_finance, tab_inventory = st.tabs(["📈 Sales", "💰 Finance", "📦 Inventory"])
 
 with tab_sales:
-    sales_page.render(sales_df, finance_df, as_of)
+    sales_page.render(sales_df, finance_df, as_of, entity)
 
 with tab_finance:
     finance_page.render(sales_df, finance_df, as_of)

@@ -15,6 +15,11 @@ data/*.csv
 # from this template belongs in git.
 Be Girl*.xlsx
 
+# Design reference screenshots (e.g. from Pipedrive, NetSuite) used to guide
+# chart design — personal reference material, not project deliverables, and
+# some are screenshots of real third-party products.
+data/ERP Inspiration/
+
 # Excel lock files (created while any .xlsx in this repo is open)
 ~$*.xlsx
 
