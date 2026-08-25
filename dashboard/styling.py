@@ -1,0 +1,135 @@
+"""
+Brand colors and CSS, straight from Lumin Light Brand Guide.html — nothing
+invented here, this file just makes those choices reusable in Streamlit.
+
+Color roles, per the brand guide's usage rules:
+- NAVY / NAVY_SECONDARY: primary text, headers, KPI numbers.
+- AMBER: accent ONLY — one highlighted series, a CTA, never a base fill and
+  never one of several category colors (the guide is explicit: "don't reuse
+  status amber/red/green for branding or charts unrelated to alerts").
+- STATUS_GOOD / STATUS_WARNING / STATUS_CRITICAL: reserved for the
+  Inventory reorder alerts. Nowhere else.
+- PRODUCT_COLORS: Sol 1-5 form a real ordinal sequence (entry-tier to
+  premium), so they're a single blue ramp light-to-dark, ending at Navy
+  Primary itself for Sol 5 — not five arbitrary hues.
+- BUYER_TYPE_COLORS: buyer types have no inherent order, so they get four
+  genuinely distinct hues instead of shades of one color.
+"""
+
+import streamlit as st
+
+NAVY = "#0B1F3A"
+NAVY_SECONDARY = "#1E3A5F"
+AMBER = "#F5A623"
+SAND = "#FDE9C8"
+
+PAGE_BG = "#F7F8FA"
+CARD_BG = "#FFFFFF"
+BORDER = "#E5E7EB"
+TEXT_SECONDARY = "#6B7280"
+
+STATUS_GOOD = "#16A34A"
+STATUS_WARNING = "#F59E0B"
+STATUS_CRITICAL = "#DC2626"
+
+# Ordinal ramp, Sol 1 (lightest) -> Sol 5 (Navy Primary) — light-mode contrast
+# checked against white card backgrounds; each bar carries a text label too,
+# so no slot relies on fill color alone to be legible.
+PRODUCT_COLORS = {
+    "Sol 1": "#9EC5F4",
+    "Sol 2": "#6DA7EC",
+    "Sol 3": "#2A78D6",
+    "Sol 4": "#184F95",
+    "Sol 5": "#0B1F3A",
+}
+
+# Four genuinely distinct hues (no inherent order among buyer types) —
+# deliberately avoids green/amber/red so nothing reads as a status signal.
+BUYER_TYPE_COLORS = {
+    "Government": "#2A78D6",
+    "Distributor": "#EB6834",
+    "NGO": "#4A3AA7",
+    "Multilateral": "#E87BA4",
+}
+
+STAGE_ORDER = ["Prospecting", "Qualification", "Proposal", "Negotiation"]
+
+
+def inject_css():
+    st.markdown(
+        f"""
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+        html, body, [class*="css"] {{
+            font-family: 'Inter', -apple-system, sans-serif;
+        }}
+        .stApp {{
+            background-color: {PAGE_BG};
+        }}
+        h1, h2, h3 {{
+            color: {NAVY} !important;
+            font-weight: 800 !important;
+        }}
+        [data-testid="stMetric"] {{
+            background-color: {CARD_BG};
+            border: 1px solid {BORDER};
+            border-radius: 12px;
+            padding: 16px 20px;
+        }}
+        [data-testid="stMetricLabel"] {{
+            color: {TEXT_SECONDARY} !important;
+            font-weight: 600 !important;
+        }}
+        [data-testid="stMetricValue"] {{
+            color: {NAVY} !important;
+            font-weight: 700 !important;
+        }}
+        .lumin-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 3px solid {AMBER};
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }}
+        .lumin-wordmark {{
+            font-weight: 800;
+            font-size: 28px;
+            letter-spacing: -0.5px;
+            color: {NAVY};
+        }}
+        .lumin-wordmark span {{ color: {AMBER}; }}
+        .lumin-tagline {{
+            font-size: 12px;
+            color: {TEXT_SECONDARY};
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }}
+        .status-pill {{
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_header(subtitle):
+    st.markdown(
+        f"""
+        <div class="lumin-header">
+            <div>
+                <div class="lumin-wordmark">Lumin<span>&middot;</span>Light</div>
+                <div class="lumin-tagline">Leadership Dashboard</div>
+            </div>
+            <div style="text-align:right; font-size:12px; color:{TEXT_SECONDARY};">{subtitle}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )

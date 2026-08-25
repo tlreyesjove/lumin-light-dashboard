@@ -74,17 +74,24 @@ def generate_finance_data(sales_df=None):
 
     revenue_cogs = revenue_and_cogs_from_sales(sales_df)
 
-    # Stop at TODAY, not CURRENT_PERIOD_END (Dec 31) — months that haven't
-    # happened yet shouldn't show up as rows of $0 revenue.
-    all_months = month_range(config.PRIOR_PERIOD_START, config.TODAY)
+    # Rows exist for the FULL fiscal year (through CURRENT_PERIOD_END, Dec
+    # 31) even though TODAY is mid-2026 — a real annual budget exists in
+    # full from day one, before any of the year's actuals happen. What's
+    # blank for future months is the ACTUAL columns (revenue, cogs, opex,
+    # ebit, cash), not the row itself and not the budget columns. This is
+    # what lets the dashboard read "the full year's budget" straight from
+    # this tab instead of reaching outside the Sheet for it.
+    all_months = month_range(config.PRIOR_PERIOD_START, config.CURRENT_PERIOD_END)
     scaffold = pd.DataFrame(
         [(m.strftime("%Y-%m"), sub) for m in all_months for sub in config.SUBSIDIARIES],
         columns=["month", "subsidiary"],
     )
 
     df = scaffold.merge(revenue_cogs, on=["month", "subsidiary"], how="left")
-    df["revenue"] = df["revenue"].fillna(0.0)
-    df["cogs"] = df["cogs"].fillna(0.0)
+    happened = df["month"] <= config.TODAY.strftime("%Y-%m")
+    df.loc[happened, "revenue"] = df.loc[happened, "revenue"].fillna(0.0)
+    df.loc[happened, "cogs"] = df.loc[happened, "cogs"].fillna(0.0)
+    # months after TODAY keep NaN revenue/cogs — "hasn't happened", not "was zero"
 
     cost = config.read_cost_structure()
     df["year"] = df["month"].str[:4].astype(int)
@@ -92,7 +99,7 @@ def generate_finance_data(sales_df=None):
     def monthly_opex(row):
         sub, year, revenue = row["subsidiary"], row["year"], row["revenue"]
         salaries = cost["headcount_base"][sub][year] * (1 + cost["benefits_loading"]) / 12
-        commission = revenue * cost["commission_pct"]
+        commission = (revenue or 0) * cost["commission_pct"]
         other_annual = cost["other_opex_2025_annual"][sub]
         if year == 2026:
             other_annual *= (1 + cost["inflation"])
@@ -101,16 +108,17 @@ def generate_finance_data(sales_df=None):
 
     salaries_col, commission_col, other_col = zip(*df.apply(monthly_opex, axis=1))
     noise = rng.uniform(0.92, 1.08, len(df))  # normal month-to-month execution variance
-    df["opex"] = ((pd.Series(salaries_col) + pd.Series(other_col)) * noise + pd.Series(commission_col)).round(2)
+    computed_opex = (pd.Series(salaries_col) + pd.Series(other_col)) * noise + pd.Series(commission_col)
+    df["opex"] = computed_opex.where(happened).round(2)  # NaN for months that haven't happened
 
     da_monthly = df.apply(lambda r: cost["da"][r["subsidiary"]] / 12, axis=1)
-    df["ebit"] = (df["revenue"] - df["cogs"] - df["opex"] - da_monthly).round(2)
+    df["ebit"] = (df["revenue"] - df["cogs"] - df["opex"] - da_monthly).where(happened).round(2)
     df = df.drop(columns=["year"])
 
-    # budget_revenue/budget_ebit are the real monthly plan from the financial
-    # model — not noise layered on top of actuals. A genuine budget is set
-    # before the year starts and doesn't move just because actuals came in
-    # differently, which is exactly what makes "actual vs. budget" meaningful.
+    # budget_revenue/budget_ebit ARE populated for every month, including
+    # ones that haven't happened yet — that's the whole point. Pulled from
+    # the financial model's monthly plan, not noise layered on actuals, so
+    # a genuine budget doesn't move just because actuals came in differently.
     monthly_budget = config.read_monthly_budget()
     df["budget_revenue"] = df.apply(lambda r: monthly_budget[(r["subsidiary"], r["month"])]["budget_revenue"], axis=1)
     df["budget_ebit"] = df.apply(lambda r: monthly_budget[(r["subsidiary"], r["month"])]["budget_ebit"], axis=1)
@@ -119,14 +127,17 @@ def generate_finance_data(sales_df=None):
 
     # Cash balance: collections lag revenue by one month (AR_LAG_DAYS ~ 1 month),
     # costs paid same month. Running balance per subsidiary, starting at
-    # STARTING_CASH_BALANCE at the very first month in the dataset.
+    # STARTING_CASH_BALANCE at the very first month in the dataset. Only
+    # meaningful for months that have happened — a cash balance for a
+    # future month is unknowable, not zero, so it stays blank too.
     cash_rows = []
     for subsidiary, group in df.groupby("subsidiary", sort=False):
         group = group.reset_index(drop=True)
+        happened_g = group["month"] <= config.TODAY.strftime("%Y-%m")
         cash_collected = group["revenue"].shift(1).fillna(group["revenue"].iloc[0])
         cash_paid = group["cogs"] + group["opex"]
-        net_cash_change = cash_collected - cash_paid
-        cash_balance = config.STARTING_CASH_BALANCE + net_cash_change.cumsum()
+        net_cash_change = (cash_collected - cash_paid).where(happened_g)
+        cash_balance = (config.STARTING_CASH_BALANCE + net_cash_change.fillna(0).cumsum()).where(happened_g)
         group["net_cash_change"] = net_cash_change.round(2)
         group["cash_balance"] = cash_balance.round(2)
         cash_rows.append(group)

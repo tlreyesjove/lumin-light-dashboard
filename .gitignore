@@ -14,7 +14,9 @@ data/*.csv
 # (this repo is meant to go public). Only the Lumin Light version we build
 # from this template belongs in git.
 Be Girl*.xlsx
-~$Be Girl*.xlsx
+
+# Excel lock files (created while any .xlsx in this repo is open)
+~$*.xlsx
 
 # OS junk
 .DS_Store
