@@ -341,6 +341,60 @@ equals the financial model's 2025 budget to the penny, for both
 subsidiaries. Finance and Inventory, which both derive from Sales,
 regenerated cleanly on top of that with no other changes needed.
 
+### 2.4 — Wiring the real budget into Finance, and two more findings
+
+Closed out the loose thread from 2.1: `budget_revenue`/`budget_ebit` in
+the Finance tab were still the old noise-around-actual placeholder. Fixed
+properly, in two parts:
+
+1. **Budget columns now read straight from the financial model's monthly
+   P&L** (Revenue and EBIT rows on `USA PL` / `Nigeria PL`), not a random
+   variance formula.
+2. **Actual Opex is now built from the same cost structure as the
+   budget** — real headcount totals, the same fixed categories (rent,
+   travel, etc. spread flat monthly), the same commission-on-revenue
+   logic — instead of the old flat "32% of revenue" guess. This matters
+   for the same reason the Sales/Finance reconciliation in 1.3 mattered:
+   if Actual and Budget are built from two unrelated cost models, any
+   "variance" between them is meaningless noise, not a real business
+   signal.
+
+**Finding #1 — the margin assumption didn't match reality.** After
+wiring this up, actual EBIT was coming in wildly ahead of budget (~190%
+in one check). Investigating why: the model's 44.5% blended margin
+assumption was a *theoretical* average (based on each product's average
+deal size), but the actual generated deals — with a fixed random seed
+and a relatively small sample (~100 Closed Won deals total) — happened to
+draw more high-margin Sol 4/5 deals than that average predicts (Sol 5
+alone realized ~40% of revenue in the data, versus ~35% theoretically
+expected). Recalibrated the model's margin assumption to 47.3% — what
+the actual generator really produces, not a theoretical estimate — which
+narrowed the gap substantially. The residual gap is real and expected:
+2025 and 2026 each independently realize a slightly different margin
+purely from small-sample randomness (46.2% vs. 48.7%), and no single
+blended assumption can perfectly match two different real outcomes at
+once. That's normal — real budgets don't perfectly predict actuals either.
+
+**Finding #2 — EBIT needs a different comparison than Revenue.** Even
+after the margin fix, 2026 YTD EBIT still looked like it was beating
+budget by ~50%, which felt too large to just accept. You caught the real
+issue: EBIT was being compared against a *prorated* slice of the annual
+budget (Jan-Aug's budgeted EBIT specifically), the same technique used
+for Revenue. But that double-counts the model's seasonality assumption —
+fixed costs (most of Opex) don't scale down in slow months the way
+revenue does, so a straight 8/12 slice of annual EBIT understates what a
+real company would expect to have banked by August. The fix:
+`config.read_annual_budget()` now pulls the FULL year's budgeted EBIT
+(the "Annual" column, not a sum of already-happened months), and YTD
+actual EBIT is compared against that instead. Same $1.84M actual EBIT,
+now correctly read as **75% of the full year's plan** (against 67% of
+the year having elapsed) — a believable, modestly-ahead-of-pace result,
+not an alarming overshoot. The lesson generalizes: Revenue is fine to
+prorate for a YTD comparison because it's expected to accrue roughly
+with time; a metric with a large fixed-cost component (EBIT, margin)
+usually isn't, and should be checked against the full-period target
+instead.
+
 ---
 
 ## Phase 3: The Streamlit App
