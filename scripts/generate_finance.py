@@ -68,7 +68,9 @@ def generate_finance_data(sales_df=None):
 
     revenue_cogs = revenue_and_cogs_from_sales(sales_df)
 
-    all_months = month_range(config.PRIOR_PERIOD_START, config.CURRENT_PERIOD_END)
+    # Stop at TODAY, not CURRENT_PERIOD_END (Dec 31) — months that haven't
+    # happened yet shouldn't show up as rows of $0 revenue.
+    all_months = month_range(config.PRIOR_PERIOD_START, config.TODAY)
     scaffold = pd.DataFrame(
         [(m.strftime("%Y-%m"), sub) for m in all_months for sub in config.SUBSIDIARIES],
         columns=["month", "subsidiary"],
@@ -109,15 +111,20 @@ if __name__ == "__main__":
     print(df.head(12).to_string())
     print(f"\n{len(df)} rows generated")
 
+    # YTD vs. YTD: compare Jan-through-TODAY's-month in both years, not
+    # 8 months of this year against a full 12 months of last year.
     current = df[df.month >= config.CURRENT_PERIOD_START.strftime("%Y-%m")]
-    prior = df[df.month < config.CURRENT_PERIOD_START.strftime("%Y-%m")]
+    prior_ytd_cutoff = f"{config.PRIOR_PERIOD_START.year}-{config.TODAY.month:02d}"
+    prior = df[(df.month >= config.PRIOR_PERIOD_START.strftime("%Y-%m")) & (df.month <= prior_ytd_cutoff)]
     for sub in config.SUBSIDIARIES:
         cur_rev = current[current.subsidiary == sub].revenue.sum()
         pri_rev = prior[prior.subsidiary == sub].revenue.sum()
         target = config.ANNUAL_REVENUE_TARGET[sub]
+        ytd_target = target * ((config.TODAY - config.CURRENT_PERIOD_START).days / (config.CURRENT_PERIOD_END - config.CURRENT_PERIOD_START).days)
         growth = (cur_rev - pri_rev) / pri_rev
-        print(f"{sub}: current ${cur_rev:,.0f} ({cur_rev/target:.1%} of ${target:,.0f} target), "
-              f"prior ${pri_rev:,.0f}, growth {growth:+.1%}")
+        print(f"{sub}: YTD ${cur_rev:,.0f} ({cur_rev/ytd_target:.1%} of ${ytd_target:,.0f} prorated YTD target, "
+              f"{cur_rev/target:.1%} of ${target:,.0f} full-year target), "
+              f"same period last year ${pri_rev:,.0f}, YoY growth {growth:+.1%}")
         print(f"  EBIT margin: {current[current.subsidiary == sub].ebit.sum() / cur_rev:.1%}")
     print(f"Ending cash balance (all subsidiaries): ${df.groupby('subsidiary').cash_balance.last().sum():,.0f}")
 

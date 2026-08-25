@@ -168,9 +168,18 @@ def generate_sales_data():
     deals = []
     deal_id = 1
 
+    # "Current" is fiscal-year-to-date (Jan 1 - today), not a full year, so
+    # the target used to size deal generation is prorated by how much of
+    # the fiscal year has actually elapsed — otherwise we'd generate a full
+    # year's worth of Closed deals within just a few months, which would
+    # make YTD look implausibly ahead of pace.
+    days_into_fiscal_year = (config.TODAY - config.CURRENT_PERIOD_START).days
+    days_in_fiscal_year = (config.CURRENT_PERIOD_END - config.CURRENT_PERIOD_START).days
+    ytd_fraction = days_into_fiscal_year / days_in_fiscal_year
+
     for subsidiary in config.SUBSIDIARIES:
-        current_target = config.ANNUAL_REVENUE_TARGET[subsidiary]
-        prior_target = current_target * config.PRIOR_PERIOD_REVENUE_FACTOR
+        current_target = config.ANNUAL_REVENUE_TARGET[subsidiary] * ytd_fraction
+        prior_target = config.ANNUAL_REVENUE_TARGET[subsidiary] * config.PRIOR_PERIOD_REVENUE_FACTOR
 
         prior_deals, deal_id = generate_closed_deals_toward_target(deal_id, "prior", subsidiary, prior_target)
         deals.extend(prior_deals)

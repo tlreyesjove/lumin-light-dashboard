@@ -64,23 +64,28 @@ def sample_stock_multiplier():
     return rng.uniform(*STOCK_LEVEL_BUCKETS[-1][1])
 
 
-def current_period_months():
+def trailing_12_months():
+    """The 12 calendar months ending with TODAY's month — deliberately NOT
+    tied to the fiscal-year boundary (Jan 1). A reorder point should
+    reflect recent operating cadence, not reset just because the fiscal
+    year did; using fiscal-YTD-only (as few as 1 month early in the year)
+    was producing zero-demand rows for slower-moving products purely from
+    a too-small sample, not because demand was actually zero."""
     months = []
-    y, m = config.CURRENT_PERIOD_START.year, config.CURRENT_PERIOD_START.month
-    end_y, end_m = config.CURRENT_PERIOD_END.year, config.CURRENT_PERIOD_END.month
-    while (y, m) <= (end_y, end_m):
+    y, m = config.TODAY.year, config.TODAY.month
+    for _ in range(12):
         months.append(f"{y:04d}-{m:02d}")
-        m += 1
-        if m > 12:
-            m = 1
-            y += 1
-    return months
+        m -= 1
+        if m < 1:
+            m = 12
+            y -= 1
+    return sorted(months)
 
 
 def monthly_demand_stats(sales_df):
     """Returns {(subsidiary, product): {'avg': x, 'max': y}} units/month,
-    over the current 12-month period, from actual Closed Won deals."""
-    months = current_period_months()
+    over the trailing 12 months, from actual Closed Won deals."""
+    months = trailing_12_months()
 
     won = sales_df[sales_df.status == "Won"].copy()
     won["month"] = pd.to_datetime(won["actual_close_date"]).dt.strftime("%Y-%m")

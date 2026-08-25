@@ -11,15 +11,19 @@ import datetime
 # ---------------------------------------------------------------------------
 # Time window
 # ---------------------------------------------------------------------------
-# The dashboard's "current" view covers the trailing 12 months.
+# Lumin Light's fiscal year is the calendar year (Jan-Dec). "Current period"
+# is fiscal year 2026, year-to-date — CURRENT_PERIOD_END is the fiscal
+# year's real end date (Dec 31), but no generator should place actual data
+# past TODAY, since those months haven't happened yet. Use TODAY, not
+# CURRENT_PERIOD_END, as the upper bound whenever generating real rows.
 TODAY = datetime.date(2026, 8, 25)
-CURRENT_PERIOD_START = datetime.date(2025, 9, 1)
-CURRENT_PERIOD_END = datetime.date(2026, 8, 31)
+CURRENT_PERIOD_START = datetime.date(2026, 1, 1)
+CURRENT_PERIOD_END = datetime.date(2026, 12, 31)
 
-# One prior 12-month window, so "revenue growth vs. prior period" has
-# something real to compare against instead of a made-up single number.
-PRIOR_PERIOD_START = datetime.date(2024, 9, 1)
-PRIOR_PERIOD_END = datetime.date(2025, 8, 31)
+# One full prior fiscal year (2025) so "revenue growth vs. prior period"
+# has something real to compare against instead of a made-up single number.
+PRIOR_PERIOD_START = datetime.date(2025, 1, 1)
+PRIOR_PERIOD_END = datetime.date(2025, 12, 31)
 
 # ---------------------------------------------------------------------------
 # Company structure
