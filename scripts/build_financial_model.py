@@ -133,7 +133,30 @@ def build_assumptions(wb):
     set(ws, check_row, 2, "Check (sums to 12.00 if evenly weighted; doesn't have to — formulas normalize either way)")
     set(ws, check_row, 3, f"=SUM(C{seas_row}:N{seas_row})", None, "0.00")
 
-    ar_row = check_row + 2
+    # Explicit quarterly revenue target, 2026 only — a real planning input
+    # (Tatiana's call, not derived math), which REPLACES what the monthly
+    # seasonality curve above used to imply per quarter (roughly 22/24/24/31
+    # before this). 2025 keeps using the seasonality curve alone, unchanged
+    # — 2025 is a settled, complete year; this is a forward-looking planning
+    # tool for the year still in progress. Monthly revenue for 2026 (in the
+    # USA PL / Nigeria PL tabs) is now: annual target x this quarter's % x
+    # (this month's seasonality weight / the sum of the 3 weights in its
+    # own quarter) — same relative intra-quarter shape as before, but each
+    # quarter's total now ties exactly to the number set here.
+    q_header_row = check_row + 2
+    q_label_row = q_header_row + 1
+    q_pct_row = q_label_row + 1
+    q_check_row = q_pct_row + 1
+    set(ws, q_header_row, 2, "QUARTERLY REVENUE TARGET SPLIT — 2026 (% of Annual)", SECTION_FONT)
+    quarters = ["Q1", "Q2", "Q3", "Q4"]
+    quarterly_pcts = [0.10, 0.20, 0.30, 0.40]
+    for i, q in enumerate(quarters):
+        set(ws, q_label_row, 3 + i, q, BLACK_BOLD)
+        set(ws, q_pct_row, 3 + i, quarterly_pcts[i], BLUE, PCT_FMT, YELLOW_FILL)
+    set(ws, q_check_row, 2, "Check (must sum to 100%)")
+    set(ws, q_check_row, 3, f"=SUM(C{q_pct_row}:F{q_pct_row})", None, PCT_FMT)
+
+    ar_row = q_check_row + 2
     set(ws, ar_row, 2, "AR Collection Lag (months) — institutional buyers pay slowly; matches the Python actuals model")
     set(ws, ar_row, 3, 1, BLUE, "0", YELLOW_FILL)
 
@@ -155,6 +178,7 @@ def build_assumptions(wb):
         "opex_cat_rows": {name: first_cat_row + i for i, (name, _, _) in enumerate(categories)},
         "opex_cat_col": {"Lumin Light USA": 3, "Lumin Light Nigeria": 4},
         "seasonality_row": seas_row,
+        "quarterly_pct_row": q_pct_row,  # columns C-F = Q1-Q4, 2026 only
         "ar_lag_cell": f"C{ar_row}",
         "cash_row": {"Lumin Light USA": cash_row1, "Lumin Light Nigeria": cash_row1 + 1},
     }
@@ -323,10 +347,26 @@ def build_subsidiary_pl(wb, sheet_name, subsidiary, assumptions_refs, headcount_
             L = col_letter(mc)
             seas_col = col_letter(3 + i)  # Assumptions seasonality columns C..N
 
-            # Revenue
-            set(ws, ROW_REVENUE, mc,
-                f"=Assumptions!${rev_col_letter}${rev_row_assump}*Assumptions!${seas_col}${seas_row}"
-                f"/SUM(Assumptions!$C${seas_row}:$N${seas_row})", GREEN, USD_FMT)
+            # Revenue. 2025: annual target x this month's share of the full
+            # year's seasonality weight. 2026: annual target x this
+            # QUARTER's explicit target % x this month's share of ITS
+            # quarter's seasonality weight — so each 2026 quarter sums to
+            # exactly the quarterly target, while months within a quarter
+            # keep the same relative shape the seasonality curve implies.
+            if year == 2026:
+                q_pct_row = assumptions_refs["quarterly_pct_row"]
+                q_idx = i // 3
+                q_col = col_letter(3 + q_idx)
+                q_start_col = col_letter(3 + 3 * q_idx)
+                q_end_col = col_letter(3 + 3 * q_idx + 2)
+                set(ws, ROW_REVENUE, mc,
+                    f"=Assumptions!${rev_col_letter}${rev_row_assump}*Assumptions!${q_col}${q_pct_row}"
+                    f"*Assumptions!${seas_col}${seas_row}"
+                    f"/SUM(Assumptions!${q_start_col}${seas_row}:${q_end_col}${seas_row})", GREEN, USD_FMT)
+            else:
+                set(ws, ROW_REVENUE, mc,
+                    f"=Assumptions!${rev_col_letter}${rev_row_assump}*Assumptions!${seas_col}${seas_row}"
+                    f"/SUM(Assumptions!$C${seas_row}:$N${seas_row})", GREEN, USD_FMT)
             # COGS
             set(ws, ROW_COGS, mc, f"={L}{ROW_REVENUE}*(1-Assumptions!${gm_cell[0]}${gm_cell[1:]})", GREEN, USD_FMT)
             # Gross Profit
