@@ -12,8 +12,9 @@ Color roles, per the brand guide's usage rules:
 - PRODUCT_COLORS: Sol 1-5 form a real ordinal sequence (entry-tier to
   premium), so they're a single blue ramp light-to-dark, ending at Navy
   Primary itself for Sol 5 — not five arbitrary hues.
-- BUYER_TYPE_COLORS: buyer types have no inherent order, so they get four
-  genuinely distinct hues instead of shades of one color.
+- CLIENT_TYPE_COLORS: Institutional vs. Commercial is the two-category,
+  one-highlighted-series case AMBER is meant for — Navy for the core
+  (Institutional) business, Amber to make Commercial pop against it.
 """
 
 import streamlit as st
@@ -43,13 +44,12 @@ PRODUCT_COLORS = {
     "Sol 5": "#0B1F3A",
 }
 
-# Four genuinely distinct hues (no inherent order among buyer types) —
-# deliberately avoids green/amber/red so nothing reads as a status signal.
-BUYER_TYPE_COLORS = {
-    "Government": "#2A78D6",
-    "Distributor": "#EB6834",
-    "NGO": "#4A3AA7",
-    "Multilateral": "#E87BA4",
+# Client Type (Institutional/Commercial) is the exact "amber as accent,
+# one series" case the brand guide describes: Navy for the core business
+# (Institutional), Amber to make the smaller Commercial slice pop against it.
+CLIENT_TYPE_COLORS = {
+    "Institutional": NAVY,
+    "Commercial": AMBER,
 }
 
 STAGE_ORDER = ["Prospecting", "Qualification", "Proposal", "Negotiation"]

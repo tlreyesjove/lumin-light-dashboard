@@ -134,6 +134,7 @@ def generate_deal(deal_id, period, subsidiary=None):
         "deal_id": f"DEAL-{deal_id:04d}",
         "subsidiary": subsidiary,
         "buyer_type": buyer_type,
+        "client_type": config.CLIENT_TYPE[buyer_type],
         "buyer_name": buyer_name,
         "product": product,
         "quantity": quantity,

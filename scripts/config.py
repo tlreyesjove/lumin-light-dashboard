@@ -152,6 +152,16 @@ WAREHOUSES = {
 
 BUYER_TYPES = ["Government", "Distributor", "NGO", "Multilateral"]
 
+# Client type is a coarser rollup of buyer_type, per Tatiana: Distributors
+# are resellers (Commercial), everyone else buying directly for their own
+# use (Government, NGO, Multilateral) is Institutional.
+CLIENT_TYPE = {
+    "Government": "Institutional",
+    "NGO": "Institutional",
+    "Multilateral": "Institutional",
+    "Distributor": "Commercial",
+}
+
 # ---------------------------------------------------------------------------
 # Products — the Sol line
 # ---------------------------------------------------------------------------
