@@ -88,8 +88,12 @@ def win_rate_for(buyer_type):
     return config.BASE_WIN_RATE + config.WIN_RATE_ADJUSTMENT[buyer_type]
 
 
-def generate_deal(deal_id, is_closed):
-    subsidiary = pick_subsidiary()
+def generate_deal(deal_id, period, subsidiary=None):
+    """period is 'prior' or 'current' for a closed deal, or None for open pipeline.
+    Pass subsidiary explicitly when generating deals toward a per-subsidiary
+    revenue target; otherwise one is picked at random (weighted by revenue split)."""
+    if subsidiary is None:
+        subsidiary = pick_subsidiary()
     buyer_type = pick_buyer_type()
     buyer_name = random.choice(BUYER_NAMES[buyer_type])
     product = pick_product()
@@ -104,7 +108,14 @@ def generate_deal(deal_id, is_closed):
     cycle_low, cycle_high = config.SALES_CYCLE_DAYS[buyer_type]
     cycle_days = random.randint(cycle_low, cycle_high)
 
-    if is_closed:
+    if period == "prior":
+        span_days = (config.PRIOR_PERIOD_END - config.PRIOR_PERIOD_START).days
+        actual_close_date = config.PRIOR_PERIOD_START + datetime.timedelta(days=random.randint(0, span_days))
+        created_date = actual_close_date - datetime.timedelta(days=cycle_days)
+        won = random.random() < win_rate_for(buyer_type)
+        stage = "Closed Won" if won else "Closed Lost"
+        expected_close_date = actual_close_date
+    elif period == "current":
         span_days = (config.TODAY - config.CURRENT_PERIOD_START).days
         actual_close_date = config.CURRENT_PERIOD_START + datetime.timedelta(days=random.randint(0, span_days))
         created_date = actual_close_date - datetime.timedelta(days=cycle_days)
@@ -139,18 +150,36 @@ def generate_deal(deal_id, is_closed):
     }
 
 
-def generate_sales_data():
-    total = config.TOTAL_DEALS
-    closed_count = round(total * 0.70)
-    open_count = total - closed_count
+def generate_closed_deals_toward_target(deal_id, period, subsidiary, target_revenue):
+    """Keep generating deals (a realistic win/lose mix) for one subsidiary/period
+    until Closed Won value reaches target_revenue. Returns (deals, next_deal_id)."""
+    deals = []
+    won_total = 0.0
+    while won_total < target_revenue:
+        deal = generate_deal(deal_id, period=period, subsidiary=subsidiary)
+        deals.append(deal)
+        deal_id += 1
+        if deal["stage"] == "Closed Won":
+            won_total += deal["deal_value"]
+    return deals, deal_id
 
+
+def generate_sales_data():
     deals = []
     deal_id = 1
-    for _ in range(closed_count):
-        deals.append(generate_deal(deal_id, is_closed=True))
-        deal_id += 1
-    for _ in range(open_count):
-        deals.append(generate_deal(deal_id, is_closed=False))
+
+    for subsidiary in config.SUBSIDIARIES:
+        current_target = config.ANNUAL_REVENUE_TARGET[subsidiary]
+        prior_target = current_target * config.PRIOR_PERIOD_REVENUE_FACTOR
+
+        prior_deals, deal_id = generate_closed_deals_toward_target(deal_id, "prior", subsidiary, prior_target)
+        deals.extend(prior_deals)
+
+        current_deals, deal_id = generate_closed_deals_toward_target(deal_id, "current", subsidiary, current_target)
+        deals.extend(current_deals)
+
+    for _ in range(config.OPEN_DEALS):
+        deals.append(generate_deal(deal_id, period=None))
         deal_id += 1
 
     df = pd.DataFrame(deals)
@@ -167,3 +196,8 @@ if __name__ == "__main__":
     print(f"Closed Won: {len(won)} deals, ${won.deal_value.sum():,.0f}")
     print(f"Closed Lost: {len(lost)} deals")
     print(f"Win rate: {len(won) / (len(won) + len(lost)):.1%}")
+
+    current_won = won[won.actual_close_date >= config.CURRENT_PERIOD_START.isoformat()]
+    prior_won = won[won.actual_close_date < config.CURRENT_PERIOD_START.isoformat()]
+    print(f"Current period Closed Won: ${current_won.deal_value.sum():,.0f}")
+    print(f"Prior period Closed Won:   ${prior_won.deal_value.sum():,.0f}")

@@ -103,9 +103,20 @@ STAGE_PROBABILITY = {
 }
 OPEN_STAGES = ["Prospecting", "Qualification", "Proposal", "Negotiation"]
 
-# Roughly how many deals to generate in total (closed + open). Tuned so
-# Closed Won value lands close to the revenue target — see generate_sales.py.
-TOTAL_DEALS = 310
+# Closed Won deals are generated per subsidiary/period by drawing deals
+# until their cumulative value reaches a target (see generate_sales.py) —
+# not by picking a fixed deal count, which turned out to be too noisy: a
+# handful of large Sol 4/5 deals landing in one period by chance could
+# swing that period's total by 20%+. Targeting revenue directly keeps
+# deal-by-deal randomness (product, buyer, exact value) while controlling
+# the metric that actually matters (period revenue, and the growth
+# between periods).
+#
+# Prior-period target as a fraction of current — this is what produces
+# "revenue growth vs. prior period," not a separately-invented growth rate.
+PRIOR_PERIOD_REVENUE_FACTOR = 0.87
+
+OPEN_DEALS = 90
 
 # Base win rate for a closed deal; nudged up/down per buyer type below.
 BASE_WIN_RATE = 0.32
@@ -128,10 +139,6 @@ SALES_CYCLE_DAYS = {
 # ---------------------------------------------------------------------------
 # Finance
 # ---------------------------------------------------------------------------
-# Prior-period revenue as a fraction of current-period revenue, i.e. how
-# much smaller last year was — drives the YoY growth number.
-PRIOR_PERIOD_REVENUE_FACTOR = 0.88
-
 BLENDED_OPEX_PCT_OF_REVENUE = 0.32   # opex as % of revenue, before EBIT
 STARTING_CASH_BALANCE = 2_200_000    # cash balance at PRIOR_PERIOD_START
 AR_LAG_DAYS = 35                     # institutional buyers pay slowly — cash lags revenue

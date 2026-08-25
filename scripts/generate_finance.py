@@ -3,17 +3,21 @@ Generates the Finance tab: one row per (month, subsidiary).
 
 Design notes:
 
-- Each subsidiary's current-period revenue is forced to land close to its
-  ANNUAL_REVENUE_TARGET (config.py), spread unevenly across 12 months
-  (random monthly weights, not a flat 1/12 each) so the trend line looks
-  like a real business, not a ruler-straight line. Prior-period revenue is
-  a flat percentage smaller (PRIOR_PERIOD_REVENUE_FACTOR), which is what
-  drives "revenue growth vs. prior period" on the dashboard.
+- revenue and cogs are NOT independently invented — they're calculated
+  directly from the Sales tab's Closed Won deals: revenue is the sum of
+  deal_value for deals that closed in that month/subsidiary, and cogs is
+  the sum of (quantity x unit_cost) for those same deals. That's what
+  makes "Sales bookings" and "Finance revenue" actually reconcile — you
+  can open both CSVs, filter Sales to Closed Won for a given month, and
+  the totals will match Finance exactly (they're the same underlying
+  numbers, just aggregated differently).
 
-- COGS uses the blended gross margin implied by the product mix in
-  config.PRODUCTS (weighted by selection_weight) — so Finance and Sales
-  agree on roughly the same margin story, just at different levels of
-  detail (Finance: one blended number a month; Sales: real margin per deal).
+- Revenue growth vs. the prior period isn't a separate invented growth
+  rate either — it falls out naturally from CLOSED_DEALS_CURRENT being a
+  bigger number than CLOSED_DEALS_PRIOR in config.py.
+
+- opex is the one line Sales data can't inform (there's no G&A/headcount
+  data in this project), so it's still modeled as a % of revenue.
 
 - cash_balance approximates a real working-capital effect: institutional
   buyers are slow payers, so this month's cash COLLECTED is modeled as
@@ -23,12 +27,12 @@ Design notes:
   cash moving in lockstep with revenue.
 """
 
-import calendar
 import datetime
 import numpy as np
 import pandas as pd
 
 import config
+from generate_sales import generate_sales_data
 
 rng = np.random.default_rng(config.RANDOM_SEED)
 
@@ -45,57 +49,40 @@ def month_range(start, end):
     return months
 
 
-def blended_gross_margin_pct():
-    total_weight = sum(p["selection_weight"] for p in config.PRODUCTS.values())
-    weighted_margin = sum(
-        p["selection_weight"] * (1 - p["unit_cost"] / p["unit_price"])
-        for p in config.PRODUCTS.values()
+def revenue_and_cogs_from_sales(sales_df):
+    """Aggregate Closed Won deals into (month, subsidiary) revenue + cogs."""
+    won = sales_df[sales_df.stage == "Closed Won"].copy()
+    won["month"] = pd.to_datetime(won["actual_close_date"]).dt.strftime("%Y-%m")
+    won["deal_cogs"] = won["quantity"] * won["unit_cost"]
+
+    grouped = won.groupby(["month", "subsidiary"]).agg(
+        revenue=("deal_value", "sum"),
+        cogs=("deal_cogs", "sum"),
+    ).reset_index()
+    return grouped
+
+
+def generate_finance_data(sales_df=None):
+    if sales_df is None:
+        sales_df = generate_sales_data()
+
+    revenue_cogs = revenue_and_cogs_from_sales(sales_df)
+
+    all_months = month_range(config.PRIOR_PERIOD_START, config.CURRENT_PERIOD_END)
+    scaffold = pd.DataFrame(
+        [(m.strftime("%Y-%m"), sub) for m in all_months for sub in config.SUBSIDIARIES],
+        columns=["month", "subsidiary"],
     )
-    return weighted_margin / total_weight
 
+    df = scaffold.merge(revenue_cogs, on=["month", "subsidiary"], how="left")
+    df["revenue"] = df["revenue"].fillna(0.0)
+    df["cogs"] = df["cogs"].fillna(0.0)
 
-def monthly_weights(n_months):
-    # Random positive weights that sum to 1 -> uneven but plausible month split.
-    raw = rng.uniform(0.7, 1.3, n_months)
-    return raw / raw.sum()
+    df["opex"] = (df["revenue"] * config.BLENDED_OPEX_PCT_OF_REVENUE * rng.uniform(0.9, 1.1, len(df))).round(2)
+    df["ebit"] = (df["revenue"] - df["cogs"] - df["opex"]).round(2)
+    df["budget_revenue"] = (df["revenue"] * (1 + rng.uniform(-config.BUDGET_VARIANCE_PCT, config.BUDGET_VARIANCE_PCT, len(df)))).round(2)
+    df["budget_ebit"] = (df["ebit"] * (1 + rng.uniform(-config.BUDGET_VARIANCE_PCT, config.BUDGET_VARIANCE_PCT, len(df)))).round(2)
 
-
-def generate_finance_data():
-    gross_margin_pct = blended_gross_margin_pct()
-
-    current_months = month_range(config.CURRENT_PERIOD_START, config.CURRENT_PERIOD_END)
-    prior_months = month_range(config.PRIOR_PERIOD_START, config.PRIOR_PERIOD_END)
-
-    rows = []
-    for subsidiary in config.SUBSIDIARIES:
-        current_total = config.ANNUAL_REVENUE_TARGET[subsidiary] * rng.uniform(0.95, 1.05)
-        prior_total = current_total * config.PRIOR_PERIOD_REVENUE_FACTOR
-
-        for period_months, period_total in [(prior_months, prior_total), (current_months, current_total)]:
-            weights = monthly_weights(len(period_months))
-            for month_date, weight in zip(period_months, weights):
-                revenue = round(period_total * weight, 2)
-                cogs = round(revenue * (1 - gross_margin_pct) * rng.uniform(0.95, 1.05), 2)
-                opex = round(revenue * config.BLENDED_OPEX_PCT_OF_REVENUE * rng.uniform(0.9, 1.1), 2)
-                ebit = round(revenue - cogs - opex, 2)
-                budget_revenue = round(revenue * (1 + rng.uniform(-config.BUDGET_VARIANCE_PCT, config.BUDGET_VARIANCE_PCT)), 2)
-                budget_ebit = round(ebit * (1 + rng.uniform(-config.BUDGET_VARIANCE_PCT, config.BUDGET_VARIANCE_PCT)), 2)
-
-                last_day = calendar.monthrange(month_date.year, month_date.month)[1]
-
-                rows.append({
-                    "month": month_date.strftime("%Y-%m"),
-                    "subsidiary": subsidiary,
-                    "revenue": revenue,
-                    "cogs": cogs,
-                    "opex": opex,
-                    "ebit": ebit,
-                    "budget_revenue": budget_revenue,
-                    "budget_ebit": budget_ebit,
-                    "days_in_month": last_day,
-                })
-
-    df = pd.DataFrame(rows)
     df = df.sort_values(["subsidiary", "month"]).reset_index(drop=True)
 
     # Cash balance: collections lag revenue by one month (AR_LAG_DAYS ~ 1 month),
@@ -113,12 +100,12 @@ def generate_finance_data():
         cash_rows.append(group)
 
     df = pd.concat(cash_rows, ignore_index=True)
-    df = df.drop(columns=["days_in_month"])
     return df
 
 
 if __name__ == "__main__":
-    df = generate_finance_data()
+    sales_df = generate_sales_data()
+    df = generate_finance_data(sales_df)
     print(df.head(12).to_string())
     print(f"\n{len(df)} rows generated")
 
@@ -133,3 +120,8 @@ if __name__ == "__main__":
               f"prior ${pri_rev:,.0f}, growth {growth:+.1%}")
         print(f"  EBIT margin: {current[current.subsidiary == sub].ebit.sum() / cur_rev:.1%}")
     print(f"Ending cash balance (all subsidiaries): ${df.groupby('subsidiary').cash_balance.last().sum():,.0f}")
+
+    # Sanity check: Finance revenue should exactly equal Sales Closed Won value
+    won = sales_df[sales_df.stage == "Closed Won"]
+    print(f"\nCheck — Sales Closed Won total: ${won.deal_value.sum():,.0f}")
+    print(f"Check — Finance revenue total:   ${df.revenue.sum():,.0f}")
