@@ -16,8 +16,14 @@ Design notes:
   rate either — it falls out naturally from CLOSED_DEALS_CURRENT being a
   bigger number than CLOSED_DEALS_PRIOR in config.py.
 
-- opex is the one line Sales data can't inform (there's no G&A/headcount
-  data in this project), so it's still modeled as a % of revenue.
+- opex is built from the SAME cost structure as the financial model's
+  budget (fixed costs — salaries, rent, etc. — spread flat across months,
+  plus commission that scales with actual revenue), with modest random
+  noise layered on top for normal month-to-month execution variance.
+  Actual and Budget sharing a cost structure is what makes "actual vs.
+  budget" a meaningful comparison — if Actual used an unrelated flat-%-
+  of-revenue guess instead, any variance would just reflect the two
+  numbers being built two different ways, not a real business story.
 
 - cash_balance approximates a real working-capital effect: institutional
   buyers are slow payers, so this month's cash COLLECTED is modeled as
@@ -80,10 +86,34 @@ def generate_finance_data(sales_df=None):
     df["revenue"] = df["revenue"].fillna(0.0)
     df["cogs"] = df["cogs"].fillna(0.0)
 
-    df["opex"] = (df["revenue"] * config.BLENDED_OPEX_PCT_OF_REVENUE * rng.uniform(0.9, 1.1, len(df))).round(2)
-    df["ebit"] = (df["revenue"] - df["cogs"] - df["opex"]).round(2)
-    df["budget_revenue"] = (df["revenue"] * (1 + rng.uniform(-config.BUDGET_VARIANCE_PCT, config.BUDGET_VARIANCE_PCT, len(df)))).round(2)
-    df["budget_ebit"] = (df["ebit"] * (1 + rng.uniform(-config.BUDGET_VARIANCE_PCT, config.BUDGET_VARIANCE_PCT, len(df)))).round(2)
+    cost = config.read_cost_structure()
+    df["year"] = df["month"].str[:4].astype(int)
+
+    def monthly_opex(row):
+        sub, year, revenue = row["subsidiary"], row["year"], row["revenue"]
+        salaries = cost["headcount_base"][sub][year] * (1 + cost["benefits_loading"]) / 12
+        commission = revenue * cost["commission_pct"]
+        other_annual = cost["other_opex_2025_annual"][sub]
+        if year == 2026:
+            other_annual *= (1 + cost["inflation"])
+        other = other_annual / 12
+        return salaries, commission, other
+
+    salaries_col, commission_col, other_col = zip(*df.apply(monthly_opex, axis=1))
+    noise = rng.uniform(0.92, 1.08, len(df))  # normal month-to-month execution variance
+    df["opex"] = ((pd.Series(salaries_col) + pd.Series(other_col)) * noise + pd.Series(commission_col)).round(2)
+
+    da_monthly = df.apply(lambda r: cost["da"][r["subsidiary"]] / 12, axis=1)
+    df["ebit"] = (df["revenue"] - df["cogs"] - df["opex"] - da_monthly).round(2)
+    df = df.drop(columns=["year"])
+
+    # budget_revenue/budget_ebit are the real monthly plan from the financial
+    # model — not noise layered on top of actuals. A genuine budget is set
+    # before the year starts and doesn't move just because actuals came in
+    # differently, which is exactly what makes "actual vs. budget" meaningful.
+    monthly_budget = config.read_monthly_budget()
+    df["budget_revenue"] = df.apply(lambda r: monthly_budget[(r["subsidiary"], r["month"])]["budget_revenue"], axis=1)
+    df["budget_ebit"] = df.apply(lambda r: monthly_budget[(r["subsidiary"], r["month"])]["budget_ebit"], axis=1)
 
     df = df.sort_values(["subsidiary", "month"]).reset_index(drop=True)
 
@@ -116,6 +146,7 @@ if __name__ == "__main__":
     current = df[df.month >= config.CURRENT_PERIOD_START.strftime("%Y-%m")]
     prior_ytd_cutoff = f"{config.PRIOR_PERIOD_START.year}-{config.TODAY.month:02d}"
     prior = df[(df.month >= config.PRIOR_PERIOD_START.strftime("%Y-%m")) & (df.month <= prior_ytd_cutoff)]
+    annual_budget = config.read_annual_budget()
     for sub in config.SUBSIDIARIES:
         cur_rev = current[current.subsidiary == sub].revenue.sum()
         pri_rev = prior[prior.subsidiary == sub].revenue.sum()
@@ -126,6 +157,13 @@ if __name__ == "__main__":
               f"{cur_rev/target:.1%} of ${target:,.0f} full-year target), "
               f"same period last year ${pri_rev:,.0f}, YoY growth {growth:+.1%}")
         print(f"  EBIT margin: {current[current.subsidiary == sub].ebit.sum() / cur_rev:.1%}")
+
+        # EBIT is compared against the FULL fiscal year's budget, not a
+        # prorated slice — see config.read_annual_budget's docstring for why.
+        cur_ebit = current[current.subsidiary == sub].ebit.sum()
+        full_year_ebit_budget = annual_budget[(sub, 2026)]["ebit"]
+        print(f"  EBIT: ${cur_ebit:,.0f} YTD vs. ${full_year_ebit_budget:,.0f} full-year budget "
+              f"({cur_ebit/full_year_ebit_budget:.1%})")
     print(f"Ending cash balance (all subsidiaries): ${df.groupby('subsidiary').cash_balance.last().sum():,.0f}")
 
     # Sanity check: Finance revenue should exactly equal Sales Closed Won value

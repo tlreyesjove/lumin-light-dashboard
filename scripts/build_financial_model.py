@@ -82,8 +82,8 @@ def build_assumptions(wb):
 
     set(ws, 10, 2, "COST & MARGIN ASSUMPTIONS", SECTION_FONT)
     set(ws, 11, 2, "Blended Gross Margin % (dollar-weighted across Sol 1-5 mix)")
-    set(ws, 11, 3, 0.445, BLUE, PCT_FMT, YELLOW_FILL)
-    set(ws, 12, 2, "Note: dollar-weighted, not simple-average-of-5-margins — matches scripts/config.py PRODUCTS", Font(italic=True, size=9))
+    set(ws, 11, 3, 0.473, BLUE, PCT_FMT, YELLOW_FILL)
+    set(ws, 12, 2, "Empirically calibrated from an actual generate_sales_data() run (config.RANDOM_SEED=42), not a theoretical average — see Learning Doc 2.4. If PRODUCTS or RANDOM_SEED in config.py ever change, recheck this against a fresh run's realized margin.", Font(italic=True, size=9))
 
     set(ws, 14, 2, "OPERATING EXPENSE ASSUMPTIONS", SECTION_FONT)
     set(ws, 15, 2, "Benefits & Payroll Tax Loading (% of base salary)")

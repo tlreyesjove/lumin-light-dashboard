@@ -28,6 +28,88 @@ def _read_revenue_targets():
     }
 
 
+def read_monthly_budget():
+    """Returns {(subsidiary, "YYYY-MM"): {"budget_revenue": x, "budget_ebit": y}},
+    read straight from the financial model's USA PL / Nigeria PL tabs (Revenue
+    row 6, EBIT row 30 — see build_financial_model.py's ROW_REVENUE/ROW_EBIT).
+    Used by generate_finance.py so the Finance tab's budget columns are a real
+    plan pulled from the model, not noise layered on top of actuals."""
+    wb = openpyxl.load_workbook(_MODEL_PATH, data_only=True)
+    sheet_by_subsidiary = {"Lumin Light USA": "USA PL", "Lumin Light Nigeria": "Nigeria PL"}
+    year_blocks = [(2025, 4), (2026, 17)]  # (year, first_month_column)
+    REVENUE_ROW, EBIT_ROW = 6, 30
+
+    budget = {}
+    for subsidiary, sheet_name in sheet_by_subsidiary.items():
+        ws = wb[sheet_name]
+        for year, first_col in year_blocks:
+            for i in range(12):
+                col = first_col + i
+                month_str = f"{year}-{i + 1:02d}"
+                budget[(subsidiary, month_str)] = {
+                    "budget_revenue": ws.cell(row=REVENUE_ROW, column=col).value,
+                    "budget_ebit": ws.cell(row=EBIT_ROW, column=col).value,
+                }
+    return budget
+
+
+def read_annual_budget():
+    """Returns {(subsidiary, year): {"revenue": x, "ebit": y}} — the FULL
+    fiscal year's budget (the "Annual" column on each PL tab: C for 2025,
+    P for 2026), not a sum of only the months that have happened so far.
+
+    EBIT in particular should be compared against the full-year budget,
+    not a prorated slice of it — a YTD actual EBIT vs. a YTD slice of
+    budget EBIT double-counts the seasonality assumption (fixed costs
+    aren't spread evenly the way a straight-line proration assumes), which
+    is what made an early build of this look like a 150% budget overshoot
+    when the real story was closer to "75% of the full year's plan banked
+    with a third of the year left to go" — a much more reasonable read."""
+    wb = openpyxl.load_workbook(_MODEL_PATH, data_only=True)
+    sheet_by_subsidiary = {"Lumin Light USA": "USA PL", "Lumin Light Nigeria": "Nigeria PL"}
+    annual_col = {2025: 3, 2026: 16}  # C, P
+    REVENUE_ROW, EBIT_ROW = 6, 30
+
+    result = {}
+    for subsidiary, sheet_name in sheet_by_subsidiary.items():
+        ws = wb[sheet_name]
+        for year, col in annual_col.items():
+            result[(subsidiary, year)] = {
+                "revenue": ws.cell(row=REVENUE_ROW, column=col).value,
+                "ebit": ws.cell(row=EBIT_ROW, column=col).value,
+            }
+    return result
+
+
+def read_cost_structure():
+    """Building blocks for computing ACTUAL Opex the same way the financial
+    model computes BUDGET Opex — fixed costs (salaries, rent, etc.) spread
+    flat across months, plus commission that scales with revenue — instead
+    of actuals using an unrelated flat-%-of-revenue guess. Sharing the same
+    structure means Actual-vs-Budget variance comes from real differences
+    (when deals actually closed, normal month-to-month cost noise), not from
+    Actual and Budget quietly using two different cost models."""
+    wb = openpyxl.load_workbook(_MODEL_PATH, data_only=True)
+    a = wb["Assumptions"]
+    hc = wb["Headcount"]
+
+    other_opex_2025_annual = {
+        "Lumin Light USA": sum(a.cell(row=r, column=3).value for r in range(23, 29)),
+        "Lumin Light Nigeria": sum(a.cell(row=r, column=4).value for r in range(23, 29)),
+    }
+    return {
+        "benefits_loading": a["C15"].value,
+        "commission_pct": a["C16"].value,
+        "inflation": a["C17"].value,
+        "da": {"Lumin Light USA": a["C18"].value, "Lumin Light Nigeria": a["C19"].value},
+        "other_opex_2025_annual": other_opex_2025_annual,
+        "headcount_base": {
+            "Lumin Light USA": {2025: hc["D27"].value, 2026: hc["E27"].value},
+            "Lumin Light Nigeria": {2025: hc["D28"].value, 2026: hc["E28"].value},
+        },
+    }
+
+
 _REVENUE_TARGETS = _read_revenue_targets()
 
 # ---------------------------------------------------------------------------
@@ -163,13 +245,9 @@ SALES_CYCLE_DAYS = {
 # ---------------------------------------------------------------------------
 # Finance
 # ---------------------------------------------------------------------------
-BLENDED_OPEX_PCT_OF_REVENUE = 0.32   # opex as % of revenue, before EBIT
+BLENDED_OPEX_PCT_OF_REVENUE = 0.32   # opex as % of revenue, before EBIT — actuals only; budget comes from the financial model
 STARTING_CASH_BALANCE = 2_200_000    # cash balance at PRIOR_PERIOD_START
 AR_LAG_DAYS = 35                     # institutional buyers pay slowly — cash lags revenue
-
-# Budget vs. actual noise (budget set before the year started, so actuals
-# naturally drift from it).
-BUDGET_VARIANCE_PCT = 0.10
 
 # ---------------------------------------------------------------------------
 # Inventory
