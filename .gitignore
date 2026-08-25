@@ -10,5 +10,11 @@ credentials/*.json
 # Generated data files (regenerate with scripts/generate_data.py — Google Sheets is the source of truth)
 data/*.csv
 
+# Real Be Girl files — reference material only, must NEVER be committed
+# (this repo is meant to go public). Only the Lumin Light version we build
+# from this template belongs in git.
+Be Girl*.xlsx
+~$Be Girl*.xlsx
+
 # OS junk
 .DS_Store
