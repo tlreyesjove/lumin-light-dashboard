@@ -33,7 +33,7 @@ def main():
     print(f"inventory.csv: {len(inventory_df)} rows")
     print(f"\nWritten to {os.path.abspath(DATA_DIR)}")
 
-    won_total = sales_df[sales_df.stage == "Closed Won"].deal_value.sum()
+    won_total = sales_df[sales_df.status == "Won"].deal_value.sum()
     revenue_total = finance_df.revenue.sum()
     print(f"\nReconciliation check: Sales Closed Won ${won_total:,.0f} vs. Finance revenue ${revenue_total:,.0f}")
     assert abs(won_total - revenue_total) < 1.0, "Sales and Finance totals don't match!"

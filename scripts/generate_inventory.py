@@ -82,7 +82,7 @@ def monthly_demand_stats(sales_df):
     over the current 12-month period, from actual Closed Won deals."""
     months = current_period_months()
 
-    won = sales_df[sales_df.stage == "Closed Won"].copy()
+    won = sales_df[sales_df.status == "Won"].copy()
     won["month"] = pd.to_datetime(won["actual_close_date"]).dt.strftime("%Y-%m")
     won = won[won["month"].isin(months)]
 

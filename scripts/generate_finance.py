@@ -51,7 +51,7 @@ def month_range(start, end):
 
 def revenue_and_cogs_from_sales(sales_df):
     """Aggregate Closed Won deals into (month, subsidiary) revenue + cogs."""
-    won = sales_df[sales_df.stage == "Closed Won"].copy()
+    won = sales_df[sales_df.status == "Won"].copy()
     won["month"] = pd.to_datetime(won["actual_close_date"]).dt.strftime("%Y-%m")
     won["deal_cogs"] = won["quantity"] * won["unit_cost"]
 
@@ -122,6 +122,6 @@ if __name__ == "__main__":
     print(f"Ending cash balance (all subsidiaries): ${df.groupby('subsidiary').cash_balance.last().sum():,.0f}")
 
     # Sanity check: Finance revenue should exactly equal Sales Closed Won value
-    won = sales_df[sales_df.stage == "Closed Won"]
+    won = sales_df[sales_df.status == "Won"]
     print(f"\nCheck — Sales Closed Won total: ${won.deal_value.sum():,.0f}")
     print(f"Check — Finance revenue total:   ${df.revenue.sum():,.0f}")

@@ -130,6 +130,7 @@ def generate_deal(deal_id, period, subsidiary=None):
         stage = stage_from_progress(days_elapsed / cycle_days)
 
     probability = config.STAGE_PROBABILITY[stage]
+    status = {"Closed Won": "Won", "Closed Lost": "Lost"}.get(stage, "Open")
 
     return {
         "deal_id": f"DEAL-{deal_id:04d}",
@@ -141,6 +142,7 @@ def generate_deal(deal_id, period, subsidiary=None):
         "unit_price": unit_price,
         "unit_cost": unit_cost,
         "deal_value": deal_value,
+        "status": status,
         "stage": stage,
         "probability": probability,
         "weighted_value": round(deal_value * probability, 2),
@@ -159,7 +161,7 @@ def generate_closed_deals_toward_target(deal_id, period, subsidiary, target_reve
         deal = generate_deal(deal_id, period=period, subsidiary=subsidiary)
         deals.append(deal)
         deal_id += 1
-        if deal["stage"] == "Closed Won":
+        if deal["status"] == "Won":
             won_total += deal["deal_value"]
     return deals, deal_id
 
@@ -191,10 +193,10 @@ if __name__ == "__main__":
     df = generate_sales_data()
     print(df.head(10).to_string())
     print(f"\n{len(df)} deals generated")
-    won = df[df.stage == "Closed Won"]
-    lost = df[df.stage == "Closed Lost"]
-    print(f"Closed Won: {len(won)} deals, ${won.deal_value.sum():,.0f}")
-    print(f"Closed Lost: {len(lost)} deals")
+    won = df[df.status == "Won"]
+    lost = df[df.status == "Lost"]
+    print(f"Won: {len(won)} deals, ${won.deal_value.sum():,.0f}")
+    print(f"Lost: {len(lost)} deals")
     print(f"Win rate: {len(won) / (len(won) + len(lost)):.1%}")
 
     current_won = won[won.actual_close_date >= config.CURRENT_PERIOD_START.isoformat()]
