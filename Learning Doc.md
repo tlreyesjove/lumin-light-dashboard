@@ -180,6 +180,67 @@ Drive folder with no live spreadsheet) is a real pattern too, but it's
 typically used for archival/backup, not for feeding a live dashboard,
 since something still has to open and parse that file before it's usable.
 
+### 2.1 — Switching to a real Jan-Dec fiscal year
+
+You caught a real gap while poking around the Finance tab: there was no
+genuine, independently-set revenue *target* living anywhere in the data —
+the $15M figure only existed in `config.py`, invisible to the dashboard,
+and the existing `budget_revenue` column was secretly derived from actual
+revenue (plus noise), so it could never show a meaningful "did we hit
+target" story — it would always land close to 100% by construction.
+
+Before fixing that, you asked a clarifying question that turned into a
+bigger change: the dashboard's "current year" was actually a rolling
+Sep-Aug window (the spec's original trailing-12-months default), not a
+real Jan-Dec fiscal year. Once we agreed Lumin Light's fiscal year is the
+calendar year, "2026 YTD" only had 8 months of data (Jan-Aug) sitting
+under a $15M *annual* target — looking artificially behind, since it was
+being compared to a full year's goal.
+
+**What changed in `config.py`:** `CURRENT_PERIOD` is now fiscal 2026
+(Jan 1 - Dec 31, though real data only ever exists through TODAY, since
+future months haven't happened). `PRIOR_PERIOD` is now a full, clean
+calendar year 2025. **2024 was dropped entirely** — it only ever had 4
+months of coverage (Sep-Dec), so it couldn't stand as a real comparison
+year, and extending it further back wasn't worth the added complexity for
+what this dashboard needs.
+
+That single change had ripple effects worth understanding, since they're
+the kind of thing that's easy to get subtly wrong:
+
+- **Sales**: deal generation for the current period now targets a
+  *prorated* share of the annual target (target × fraction of the fiscal
+  year elapsed — about 65% as of today), not the full annual figure.
+  Otherwise 8 months of closed deals would need to already equal a full
+  year's worth of business, which would look like the company was way
+  ahead of pace rather than on a normal trajectory.
+- **Finance**: revenue growth vs. prior period now compares YTD to
+  *the same YTD months* last year (Jan-Aug 2026 vs. Jan-Aug 2025), not 8
+  months of this year against a full 12 months of last year — comparing
+  different-length periods would have made growth look artificially bad
+  regardless of how the business is actually doing.
+- **Inventory**: this was the subtlest one. Demand stats initially switched
+  to "fiscal YTD only" along with everything else — but early in a fiscal
+  year, that's a small sample, and one slower-moving product/warehouse
+  combo (Sol 3, Nigeria) came back with **zero** demand and a **zero**
+  reorder point, purely because no Sol 3 deals happened to close in those
+  particular 8 months — not because real demand was zero. Fixed by
+  switching Inventory's demand window to a **trailing 12 months ending
+  today**, independent of the fiscal year boundary. This is also just
+  more realistic: a warehouse's restocking cadence doesn't reset itself
+  every January 1st.
+
+Current numbers after the change: USA YTD revenue is $6.03M (103% of a
+prorated $5.84M YTD target, +8.9% YoY); Nigeria YTD is $3.97M (102% of a
+prorated $3.89M YTD target, -3.9% YoY) — a believable mixed picture, not
+everything trending the same direction.
+
+**Still open:** the `budget_revenue`/`budget_ebit` columns in the Finance
+tab are still the old noise-around-actual version — turning them into a
+genuine, independent monthly plan (a flat split of the real annual target)
+is the next thing to fix, now that the fiscal year framing underneath it
+is correct.
+
 ---
 
 ## Phase 3: The Streamlit App
