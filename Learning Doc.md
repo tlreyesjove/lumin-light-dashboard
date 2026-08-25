@@ -395,6 +395,34 @@ with time; a metric with a large fixed-cost component (EBIT, margin)
 usually isn't, and should be checked against the full-period target
 instead.
 
+### 2.5 — Explicit quarterly revenue targets (2026 only)
+
+You wanted a real quarterly pacing target — 10%/20%/30%/40% for 2026 —
+distinct from what the monthly seasonality curve already implied per
+quarter (~22/24/24/31). Worth naming the distinction we talked through:
+the *implied* quarterly totals were never a deliberate decision, just
+whatever fell out of summing three months of the existing curve. What
+you asked for is a genuine planning input — a number Finance would have
+picked on purpose — so it needed its own place in the Assumptions tab,
+not just an after-the-fact grouping of monthly numbers.
+
+Your call: the new quarterly targets *replace* the monthly breakdown for
+2026 (not sit alongside it as a second, possibly-disagreeing number —
+that would've reintroduced the exact "two things both claim to be true"
+problem fixed a few times already). 2025 stays on the seasonality curve
+alone, since it's complete and settled — this is a forward-looking tool
+for the year still in progress.
+
+Mechanically: 2026 monthly revenue is now `annual target × that
+quarter's target % × (this month's seasonality weight ÷ the sum of
+weights within its own quarter)` — same relative shape month-to-month
+within a quarter as before, but each quarter now ties to its explicit
+target exactly (confirmed: 10.0/20.0/30.0/40.0%, annual total unchanged
+at $15M — the quarterly %s summing to 100% is what guarantees that).
+
+Data-layer only for now, by request — this doesn't show up on the
+dashboard yet.
+
 ---
 
 ## Phase 3: The Streamlit App
