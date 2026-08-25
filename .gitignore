@@ -1,0 +1,14 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Google service account credentials — never commit these
+credentials/*.json
+.env
+
+# Generated data files (regenerate with scripts/generate_data.py — Google Sheets is the source of truth)
+data/*.csv
+
+# OS junk
+.DS_Store

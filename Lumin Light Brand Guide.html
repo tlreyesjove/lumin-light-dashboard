@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lumin Light — Brand Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #F7F8FA;
+    color: #14213D;
+    margin: 0;
+    padding: 40px;
+  }
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    padding: 48px;
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 3px solid #F5A623;
+    padding-bottom: 20px;
+    margin-bottom: 32px;
+  }
+  .wordmark {
+    font-weight: 800;
+    font-size: 30px;
+    letter-spacing: -0.5px;
+    color: #0B1F3A;
+  }
+  .wordmark span { color: #F5A623; }
+  .tagline {
+    font-size: 12px;
+    color: #6B7280;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #6B7280;
+    font-weight: 700;
+    margin: 28px 0 12px 0;
+  }
+  .section:first-of-type h2 { margin-top: 0; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .swatch {
+    flex: 1;
+    min-width: 110px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #E5E7EB;
+  }
+  .swatch .fill { height: 56px; }
+  .swatch .label {
+    padding: 8px 10px;
+    font-size: 11px;
+    background: #fff;
+  }
+  .swatch .name { font-weight: 600; display: block; }
+  .swatch .hex { color: #6B7280; font-family: monospace; }
+  .type-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 8px 0;
+    border-bottom: 1px solid #F0F1F3;
+  }
+  .type-row .sample { font-family: 'Inter', sans-serif; }
+  .type-row .meta { font-size: 11px; color: #6B7280; font-family: monospace; }
+  .two-col { display: flex; gap: 32px; }
+  .two-col > div { flex: 1; }
+  ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
+  li { margin-bottom: 4px; }
+  .footer {
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid #E5E7EB;
+    font-size: 11px;
+    color: #6B7280;
+  }
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    color: white;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div>
+      <div class="wordmark">Lumin<span>·</span>Light</div>
+      <div class="tagline">Brand Guide — v1</div>
+    </div>
+    <div style="text-align:right; font-size:12px; color:#6B7280;">Modern &amp; tech-forward<br>Solar lighting, built for the field</div>
+  </div>
+
+  <div class="section">
+    <h2>Color — Brand</h2>
+    <div class="row">
+      <div class="swatch">
+        <div class="fill" style="background:#0B1F3A;"></div>
+        <div class="label"><span class="name">Navy (Primary)</span><span class="hex">#0B1F3A</span></div>
+      </div>
+      <div class="swatch">
+        <div class="fill" style="background:#1E3A5F;"></div>
+        <div class="label"><span class="name">Navy (Secondary)</span><span class="hex">#1E3A5F</span></div>
+      </div>
+      <div class="swatch">
+        <div class="fill" style="background:#F5A623;"></div>
+        <div class="label"><span class="name">Amber (Accent)</span><span class="hex">#F5A623</span></div>
+      </div>
+      <div class="swatch">
+        <div class="fill" style="background:#FDE9C8;"></div>
+        <div class="label"><span class="name">Sand (Light accent)</span><span class="hex">#FDE9C8</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Color — Neutrals (dashboard surfaces)</h2>
+    <div class="row">
+      <div class="swatch">
+        <div class="fill" style="background:#F7F8FA; border-bottom:1px solid #E5E7EB;"></div>
+        <div class="label"><span class="name">Page background</span><span class="hex">#F7F8FA</span></div>
+      </div>
+      <div class="swatch">
+        <div class="fill" style="background:#FFFFFF; border-bottom:1px solid #E5E7EB;"></div>
+        <div class="label"><span class="name">Card / surface</span><span class="hex">#FFFFFF</span></div>
+      </div>
+      <div class="swatch">
+        <div class="fill" style="background:#E5E7EB;"></div>
+        <div class="label"><span class="name">Border</span><span class="hex">#E5E7EB</span></div>
+      </div>
+      <div class="swatch">
+        <div class="fill" style="background:#6B7280;"></div>
+        <div class="label"><span class="name">Text — secondary</span><span class="hex">#6B7280</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Color — Status (functional only, not brand elements)</h2>
+    <div class="row">
+      <div class="swatch">
+        <div class="fill" style="background:#16A34A;"></div>
+        <div class="label"><span class="name">Healthy / on target</span><span class="hex">#16A34A</span></div>
+      </div>
+      <div class="swatch">
+        <div class="fill" style="background:#F59E0B;"></div>
+        <div class="label"><span class="name">Warning / low stock</span><span class="hex">#F59E0B</span></div>
+      </div>
+      <div class="swatch">
+        <div class="fill" style="background:#DC2626;"></div>
+        <div class="label"><span class="name">Critical / reorder now</span><span class="hex">#DC2626</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Typography — Inter (Google Fonts, free)</h2>
+    <div class="type-row"><span class="sample" style="font-size:26px; font-weight:800;">Dashboard Title</span><span class="meta">H1 · 800 · 26px · Navy</span></div>
+    <div class="type-row"><span class="sample" style="font-size:18px; font-weight:700;">Section Header</span><span class="meta">H2 · 700 · 18px · Navy</span></div>
+    <div class="type-row"><span class="sample" style="font-size:14px; font-weight:600;">Metric Label / KPI Title</span><span class="meta">Label · 600 · 14px · Secondary</span></div>
+    <div class="type-row"><span class="sample" style="font-size:28px; font-weight:700;">$1.4M</span><span class="meta">KPI Number · 700 · 28px · Navy</span></div>
+    <div class="type-row"><span class="sample" style="font-size:14px; font-weight:400;">Body text and table content reads at 14px regular.</span><span class="meta">Body · 400 · 14px</span></div>
+  </div>
+
+  <div class="two-col">
+    <div class="section">
+      <h2>Usage — Do</h2>
+      <ul>
+        <li>Navy for primary text, headers, nav, and primary buttons</li>
+        <li>Amber only as an accent — CTAs, highlights, one data series</li>
+        <li>Light gray page background with white cards, per Sales/Finance/Inventory pillar</li>
+        <li>Status colors reserved strictly for alerts/thresholds (never decorative)</li>
+        <li>One typeface (Inter), varying weight for hierarchy</li>
+      </ul>
+    </div>
+    <div class="section">
+      <h2>Usage — Don't</h2>
+      <ul>
+        <li>Don't use amber as a large background fill — it's an accent, not a base color</li>
+        <li>Don't reuse status amber/red/green for branding or charts unrelated to alerts</li>
+        <li>Don't mix in a second typeface — use weight/size instead</li>
+        <li>Don't default to dark mode — light background is the standard here</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer">
+    Lumin Light is a fictional company built for a personal learning/portfolio project. This guide is meant to be referenced directly by Claude Code when building the dashboard (colors, type, and usage rules above are final for v1).
+  </div>
+
+</div>
+</body>
+</html>
