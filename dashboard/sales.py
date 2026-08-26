@@ -37,6 +37,13 @@ import streamlit as st
 from styling import PRODUCT_COLORS, CLIENT_TYPE_COLORS, WIN_LOSS_COLORS, NAVY, AMBER, TEXT_SECONDARY, BORDER
 
 GOAL_COLOR = BORDER
+# The one color for any on-chart number that sits inside a dark bar fill
+# (navy actual bars, the Win/Loss bars, etc.) — grey (TEXT_SECONDARY) reads
+# fine on the white page background but is low-contrast on a dark fill,
+# which is what made the exceeded-case goal label (sitting inside the
+# taller actual bar) hard to read. Every such label uses this same white,
+# consistently, rather than each mark picking its own shade.
+LABEL_ON_DARK_COLOR = "#F7F8FA"
 
 
 def quarter_bounds(year, q):
@@ -109,13 +116,16 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=
     df["goal_label_y"] = df["goal"]
     df["actual_label_y"] = df["actual"].where(exceeded, other=df["actual"] * 0.5)
     df["actual_inside_bar"] = ~exceeded
-    # Inside its own bar needs a light color to read against the dark
-    # fill (except actual == 0, where there's no bar to sit on — dark
-    # text instead). Outside the bar (exceeded case), it's on the page
-    # background, so it always uses the same secondary/dark tone the goal
-    # label uses.
+    # Whichever label currently sits INSIDE the dark actual bar gets
+    # LABEL_ON_DARK_COLOR; whichever sits OUTSIDE, on the page background,
+    # gets TEXT_SECONDARY. Normal case: actual is inside (white), goal is
+    # outside (grey). Exceeded case: that flips — goal is now the one
+    # inline inside the taller actual bar (white), and actual moved
+    # outside, above the bar it beat (grey). actual==0 is a special case
+    # of "outside" — there's no bar at all for the label to sit inside.
     df["actual_label_color"] = df.apply(
-        lambda r: (TEXT_SECONDARY if (r["actual"] == 0 or r["actual"] > r["goal"]) else "#F7F8FA"), axis=1)
+        lambda r: (TEXT_SECONDARY if (r["actual"] == 0 or r["actual"] > r["goal"]) else LABEL_ON_DARK_COLOR), axis=1)
+    df["goal_label_color"] = exceeded.map({True: LABEL_ON_DARK_COLOR, False: TEXT_SECONDARY})
 
     y_scale = alt.Scale(domain=[0, y_max]) if y_max else alt.Undefined
 
@@ -143,8 +153,9 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=
     # falls back to Altair's default tooltip, dumping every encoded field
     # verbatim — including internal helper columns like goal_label_color,
     # which mean nothing to a viewer.
-    goal_labels = base.mark_text(dy=-10, fontWeight="bold", fontSize=11, color=TEXT_SECONDARY).encode(
+    goal_labels = base.mark_text(dy=-10, fontWeight="bold", fontSize=11).encode(
         x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("goal_label_y:Q", scale=y_scale), text=alt.Text("goal_label:N"),
+        color=alt.Color("goal_label_color:N", scale=None, legend=None),
         tooltip=tooltip,
     )
     # Split into two layers rather than one, because the two cases need a
