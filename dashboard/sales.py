@@ -56,6 +56,20 @@ def money_label(v):
     return f"${v/1_000:,.0f}K"
 
 
+# Same "$1.7M" / "$330K" / "$0" style as money_label(), but as a Vega
+# expression — for AXIS TICKS, which Vega generates itself from the scale
+# (not from a dataframe column money_label() could run over in Python).
+# Vega's own "s" format type would give "$950k" (lowercase k for
+# thousands, though uppercase M/G/etc. above it) — this forces uppercase
+# K to match money_label() exactly, and special-cases 0 to show as plain
+# "$0" rather than "$0K".
+MONEY_AXIS_EXPR = (
+    "datum.value == 0 ? '$0' : "
+    "(abs(datum.value) >= 1000000 ? '$' + format(datum.value / 1000000, '.1f') + 'M' : "
+    "'$' + format(datum.value / 1000, '.0f') + 'K')"
+)
+
+
 def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=None):
     """Shared "actual vs. goal" bar: a light gray bar sized to the goal,
     with a colored bar for the actual value drawn on top of it — same
@@ -107,7 +121,7 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=
     base = alt.Chart(df)
     goal_bars = base.mark_bar(size=52, cornerRadiusTopLeft=4, cornerRadiusTopRight=4, color=GOAL_COLOR).encode(
         x=alt.X(f"{x_field}:N", title=x_title, sort=x_sort, axis=alt.Axis(labelAngle=0)),
-        y=alt.Y("goal:Q", title="Sales ($)", scale=y_scale),
+        y=alt.Y("goal:Q", title="Sales ($)", scale=y_scale, axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
         tooltip=tooltip,
     )
     actual_bars = base.mark_bar(size=52, cornerRadiusTopLeft=4, cornerRadiusTopRight=4, color=actual_color).encode(
@@ -271,7 +285,7 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
     by_stage.columns = ["stage", "weighted_value"]
     chart = alt.Chart(by_stage).mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4, size=48).encode(
         x=alt.X("stage:N", sort=STAGE_ORDER, title=None, axis=alt.Axis(labelAngle=0)),
-        y=alt.Y("weighted_value:Q", title="Weighted Value ($)"),
+        y=alt.Y("weighted_value:Q", title="Weighted Value ($)", axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
         color=alt.value(NAVY),
         tooltip=[alt.Tooltip("stage:N", title="Stage"),
                  alt.Tooltip("weighted_value:Q", title="Weighted Value", format="$,.0f")],
