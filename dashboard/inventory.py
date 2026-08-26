@@ -168,10 +168,16 @@ def render(sales_df, inventory_df, as_of):
         use_container_width=True, hide_index=True,
         column_config={
             "warehouse": "Warehouse", "product": "Product",
-            "stock_on_hand": st.column_config.NumberColumn("Stock on Hand", format="%,.0f"),
-            "reorder_point": st.column_config.NumberColumn("Reorder Point", format="%,.0f"),
-            "pipeline_demand_units": st.column_config.NumberColumn("Weighted Pipeline Demand", format="%,.0f"),
-            "projected_stock": st.column_config.NumberColumn("Projected Stock", format="%,.0f"),
+            # format="%,.0f" LOOKS right but silently fails in this
+            # Streamlit version — the "," thousands-separator flag isn't
+            # supported by its printf-style formatter (sprintf.js), so it
+            # falls back to the raw unformatted number. The predefined
+            # "localized" preset does support commas (confirmed
+            # empirically, since this isn't documented).
+            "stock_on_hand": st.column_config.NumberColumn("Stock on Hand", format="localized"),
+            "reorder_point": st.column_config.NumberColumn("Reorder Point", format="localized"),
+            "pipeline_demand_units": st.column_config.NumberColumn("Weighted Pipeline Demand", format="localized"),
+            "projected_stock": st.column_config.NumberColumn("Projected Stock", format="localized"),
             "reorder_status": "Status",
         },
     )

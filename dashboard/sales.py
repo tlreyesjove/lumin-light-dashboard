@@ -437,9 +437,19 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
             "buyer_name": st.column_config.TextColumn("Customer"),
             "product": st.column_config.TextColumn("Product"),
             "stage": st.column_config.TextColumn("Pipeline Stage"),
-            "deal_value": st.column_config.NumberColumn("Deal Value", format="$%,.0f"),
-            "probability": st.column_config.NumberColumn("Probability", format="%.0%%"),
-            "weighted_value": st.column_config.NumberColumn("Weighted Value", format="$%,.0f"),
+            # format="$%,.0f" LOOKS right but silently fails in this
+            # Streamlit version — the "," thousands-separator flag isn't
+            # supported by its printf-style formatter (sprintf.js), so it
+            # falls back to showing the raw unformatted number. The
+            # predefined "dollar" preset does support commas; pairing it
+            # with step=1 is what drops it to 0 decimals (dollar's default
+            # is 2) — confirmed empirically, since this isn't documented.
+            "deal_value": st.column_config.NumberColumn("Deal Value", format="dollar", step=1),
+            # Same story for percent: the printf spec "%.0f%%" doesn't
+            # multiply the underlying 0-1 fraction by 100 (it would show
+            # "1%" for 0.9), but the predefined "percent" preset does.
+            "probability": st.column_config.NumberColumn("Probability", format="percent"),
+            "weighted_value": st.column_config.NumberColumn("Weighted Value", format="dollar", step=1),
             "expected_close_date": st.column_config.DateColumn("Expected Close"),
         },
     )
