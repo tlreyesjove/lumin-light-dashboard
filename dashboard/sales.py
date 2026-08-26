@@ -5,8 +5,11 @@ Sales pillar, split into two sections per Tatiana's request:
   Sales YTD (actual vs. annual goal), Sales by Quarter (actual vs. each
   quarter's goal), Sales by Channel (Institutional vs. Commercial share),
   and Win/Loss Rate (a diverging bar, by deal count: won / (won + lost)).
-- Pipeline — what's still open: weighted pipeline value by stage, and
-  what's expected to close this quarter.
+- Pipeline — what's still open: weighted pipeline value by stage, what's
+  expected to close this quarter, and a Revenue Forecast by Month chart
+  (Open by expected close date vs. Won by actual close date, both
+  weighted, monthly and NOT cumulative — modeled on a Pipedrive forecast
+  report Tatiana shared).
 
 Goals (in the bullet-style charts) come from the Finance tab's
 budget_revenue — annual and quarterly totals are both just sums of that
@@ -291,6 +294,39 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
                  alt.Tooltip("weighted_value:Q", title="Weighted Value", format="$,.0f")],
     ).properties(height=280)
     st.altair_chart(chart, use_container_width=True)
+
+    st.markdown("**Revenue Forecast by Month**")
+    st.caption("Monthly, not cumulative — Open (by expected close date) vs. Won (by actual close date), both weighted.")
+    months_this_year = pd.date_range(f"{year}-01-01", f"{year}-12-01", freq="MS")
+
+    open_by_month = open_deals.copy()
+    open_by_month["month"] = open_by_month.expected_close_date.dt.to_period("M").dt.to_timestamp()
+    open_grouped = open_by_month[open_by_month.month.dt.year == year].groupby("month").weighted_value.sum()
+
+    won_by_month = won_deals.copy()
+    won_by_month["month"] = won_by_month.actual_close_date.dt.to_period("M").dt.to_timestamp()
+    won_grouped = won_by_month[won_by_month.month.dt.year == year].groupby("month").weighted_value.sum()
+
+    forecast_rows = []
+    for m in months_this_year:
+        label = m.strftime("%b %Y")
+        forecast_rows.append({"month": label, "month_sort": m, "series": "Open", "value": open_grouped.get(m, 0.0)})
+        forecast_rows.append({"month": label, "month_sort": m, "series": "Won", "value": won_grouped.get(m, 0.0)})
+    forecast_df = pd.DataFrame(forecast_rows)
+    month_order = [m.strftime("%b %Y") for m in months_this_year]
+    forecast_colors = {"Open": PRODUCT_COLORS["Sol 1"], "Won": NAVY}
+
+    forecast_chart = alt.Chart(forecast_df).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3).encode(
+        x=alt.X("month:N", title=None, sort=month_order, axis=alt.Axis(labelAngle=0)),
+        xOffset=alt.XOffset("series:N", sort=["Open", "Won"]),
+        y=alt.Y("value:Q", title="Weighted Value ($)", axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
+        color=alt.Color("series:N", title=None, scale=alt.Scale(
+            domain=["Open", "Won"], range=[forecast_colors["Open"], forecast_colors["Won"]]),
+            legend=alt.Legend(orient="bottom", symbolType="circle")),
+        tooltip=[alt.Tooltip("month:N", title="Month"), alt.Tooltip("series:N", title="Status"),
+                 alt.Tooltip("value:Q", title="Weighted Value", format="$,.0f")],
+    ).properties(height=280)
+    st.altair_chart(forecast_chart, use_container_width=True)
 
     st.divider()
     st.markdown("**Open Pipeline — Detail**")
