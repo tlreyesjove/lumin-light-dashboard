@@ -83,6 +83,16 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=
     # medium-gray label all but disappears there. Use a near-white color
     # in that case instead, dark gray otherwise.
     df["goal_label_color"] = df.apply(lambda r: "#F7F8FA" if r["actual"] >= r["goal"] else TEXT_SECONDARY, axis=1)
+    # Placing the goal label AT the goal value (like the actual label sits
+    # at the actual value) collides whenever the two are close — as they
+    # were for Q2, where goal and actual differ by only ~$100K, so both
+    # labels landed almost on top of each other near the bar's top. Anchor
+    # the goal label at a fixed fraction of whichever value is SMALLER
+    # instead — that's always safely inside the shorter bar, regardless of
+    # how close goal and actual happen to be, and it's always within the
+    # actual (colored) bar's own height whenever there's any actual value
+    # at all, which is exactly what goal_label_color is already keyed on.
+    df["goal_label_y"] = df[["goal", "actual"]].min(axis=1) * 0.55
 
     y_scale = alt.Scale(domain=[0, y_max]) if y_max else alt.Undefined
 
@@ -110,8 +120,8 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=
     # falls back to Altair's default tooltip, dumping every encoded field
     # verbatim — including internal helper columns like goal_label_color,
     # which mean nothing to a viewer.
-    goal_labels = base.mark_text(dy=-10, fontWeight="bold", fontSize=11).encode(
-        x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("goal:Q", scale=y_scale), text=alt.Text("goal_label:N"),
+    goal_labels = base.mark_text(fontWeight="bold", fontSize=11).encode(
+        x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("goal_label_y:Q", scale=y_scale), text=alt.Text("goal_label:N"),
         color=alt.Color("goal_label_color:N", scale=None, legend=None),
         tooltip=tooltip,
     )
