@@ -49,31 +49,59 @@ def quarter_bounds(year, q):
     return start, end
 
 
+def money_label(v):
+    """"$1.7M" / "$330K" style — used for the on-chart text labels."""
+    if abs(v) >= 1_000_000:
+        return f"${v/1_000_000:,.1f}M"
+    return f"${v/1_000:,.0f}K"
+
+
 def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None):
     """Shared "actual vs. goal" bar: a light gray bar sized to the goal,
     with a colored bar for the actual value drawn on top of it — same
     idea as Tatiana's reference screenshots (a target bracket behind a
-    solid progress bar)."""
+    solid progress bar). Both layers share one tooltip (Goal, Deals Won,
+    Difference, % of Goal) so hovering anywhere on the column — the gray
+    goal portion or the colored actual portion — shows the same clean
+    card, instead of Altair's default raw-field tooltip on whichever
+    layer doesn't have one explicitly set.
+
+    Note: Altair/Vega-Lite tooltips are a plain list of label/value rows
+    — no colored text, no rounded badge, no divider line. This matches
+    Tatiana's reference CONTENT (title, %, Goal, Deals Won, Difference)
+    as closely as a declarative Altair tooltip can; the reference's exact
+    visual polish would need a custom Vega tooltip handler, a bigger build.
+    """
+    df = df.copy()
+    df["difference"] = df["actual"] - df["goal"]
+    df["difference_label"] = df["difference"].apply(lambda v: f"-${abs(v):,.0f}" if v < 0 else f"${v:,.0f}")
+    df["goal_label"] = df["goal"].apply(lambda v: f"{money_label(v)} \U0001F3AF")  # \U0001F3AF = 🎯
+    df["actual_label"] = df["actual"].apply(money_label)
+
+    tooltip = [
+        alt.Tooltip(f"{x_field}:N", title=x_title or " "),
+        alt.Tooltip("pct_of_goal:Q", title="% of Goal", format=".0%"),
+        alt.Tooltip("goal:Q", title="Goal", format="$,.0f"),
+        alt.Tooltip("actual:Q", title="Deals Won", format="$,.0f"),
+        alt.Tooltip("difference_label:N", title="Difference"),
+    ]
+
     base = alt.Chart(df)
     goal_bars = base.mark_bar(size=52, cornerRadiusTopLeft=4, cornerRadiusTopRight=4, color=GOAL_COLOR).encode(
         x=alt.X(f"{x_field}:N", title=x_title, sort=x_sort, axis=alt.Axis(labelAngle=0)),
         y=alt.Y("goal:Q", title="Deal Value ($)"),
+        tooltip=tooltip,
     )
     actual_bars = base.mark_bar(size=52, cornerRadiusTopLeft=4, cornerRadiusTopRight=4, color=actual_color).encode(
         x=alt.X(f"{x_field}:N", sort=x_sort),
         y=alt.Y("actual:Q"),
-        tooltip=[
-            alt.Tooltip(f"{x_field}:N", title=x_title),
-            alt.Tooltip("goal:Q", title="Goal", format="$,.0f"),
-            alt.Tooltip("actual:Q", title="Deals Won", format="$,.0f"),
-            alt.Tooltip("pct_of_goal:Q", title="% of Goal", format=".0%"),
-        ],
+        tooltip=tooltip,
     )
     goal_labels = base.mark_text(dy=-10, fontWeight="bold", color=TEXT_SECONDARY, fontSize=11).encode(
-        x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("goal:Q"), text=alt.Text("goal:Q", format="$.2s"),
+        x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("goal:Q"), text=alt.Text("goal_label:N"),
     )
     actual_labels = base.mark_text(dy=-8, fontWeight="bold", color=actual_color, fontSize=11).encode(
-        x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("actual:Q"), text=alt.Text("actual:Q", format="$.2s"),
+        x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("actual:Q"), text=alt.Text("actual_label:N"),
     )
     return (goal_bars + actual_bars + goal_labels + actual_labels).properties(height=height)
 
