@@ -171,10 +171,10 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
                      alt.Tooltip("revenue:Q", title="Revenue", format="$,.0f"),
                      alt.Tooltip("pct:Q", title="Share", format=".0%")],
         )
-        donut = base.mark_arc(innerRadius=45, outerRadius=65, cornerRadius=3)
-        donut_labels = base.mark_text(radius=82, fontWeight="bold", fontSize=11, color=TEXT_SECONDARY).encode(text="label:N")
+        pie = base.mark_arc(outerRadius=65)
+        pie_labels = base.mark_text(radius=82, fontWeight="bold", fontSize=11, color=TEXT_SECONDARY).encode(text="label:N")
         st.altair_chart(
-            (donut + donut_labels).properties(height=260, padding={"left": 55, "right": 55, "top": 10, "bottom": 10}),
+            (pie + pie_labels).properties(height=260, padding={"left": 55, "right": 55, "top": 10, "bottom": 10}),
             use_container_width=True,
         )
         st.caption("Institutional: government, NGO, multilateral")
