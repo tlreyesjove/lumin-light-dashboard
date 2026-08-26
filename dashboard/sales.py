@@ -105,12 +105,19 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=
         y=alt.Y("actual:Q", scale=y_scale),
         tooltip=tooltip,
     )
+    # Both label marks get the same explicit tooltip as the bars — without
+    # it, hovering directly on the label TEXT (a real, if small, hit area)
+    # falls back to Altair's default tooltip, dumping every encoded field
+    # verbatim — including internal helper columns like goal_label_color,
+    # which mean nothing to a viewer.
     goal_labels = base.mark_text(dy=-10, fontWeight="bold", fontSize=11).encode(
         x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("goal:Q", scale=y_scale), text=alt.Text("goal_label:N"),
         color=alt.Color("goal_label_color:N", scale=None, legend=None),
+        tooltip=tooltip,
     )
     actual_labels = base.mark_text(dy=-8, fontWeight="bold", color=actual_color, fontSize=11).encode(
         x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("actual:Q", scale=y_scale), text=alt.Text("actual_label:N"),
+        tooltip=tooltip,
     )
     return (goal_bars + actual_bars + goal_labels + actual_labels).properties(height=height)
 
@@ -178,8 +185,11 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
         # each label render in its own slice's color (amber text on an
         # amber slice is nearly invisible — exactly the "hidden behind
         # the chart" look Tatiana flagged).
+        pie_tooltip = [alt.Tooltip("client_type:N", title="Client Type"),
+                       alt.Tooltip("revenue:Q", title="Revenue", format="$,.0f"),
+                       alt.Tooltip("pct:Q", title="Share", format=".0%")]
         pie_labels = base.mark_text(radius=100, fontWeight="bold", fontSize=11).encode(
-            text="label:N", color=alt.value(TEXT_SECONDARY),
+            text="label:N", color=alt.value(TEXT_SECONDARY), tooltip=pie_tooltip,
         )
         st.altair_chart(
             (pie + pie_labels).properties(height=260, padding={"left": 55, "right": 55, "top": 10, "bottom": 10}),
@@ -218,8 +228,12 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
                      alt.Tooltip("count:Q", title="Deals", format=",.0f"),
                      alt.Tooltip("amount:Q", title="Value", format="$,.0f")],
         )
+        wl_tooltip = [alt.Tooltip("outcome:N", title="Outcome"),
+                      alt.Tooltip("pct:Q", title="Rate", format=".1%"),
+                      alt.Tooltip("count:Q", title="Deals", format=",.0f"),
+                      alt.Tooltip("amount:Q", title="Value", format="$,.0f")]
         wl_labels = alt.Chart(wl_df).mark_text(fontWeight="bold", fontSize=12, dy=alt.expr("datum.pct > 0 ? -8 : 14")).encode(
-            x=alt.X("label:N"), y=alt.Y("pct:Q"), text=alt.Text("pct:Q", format=".0%"),
+            x=alt.X("label:N"), y=alt.Y("pct:Q"), text=alt.Text("pct:Q", format=".0%"), tooltip=wl_tooltip,
         )
         st.altair_chart((wl_chart + wl_labels).properties(height=260), use_container_width=True)
 
