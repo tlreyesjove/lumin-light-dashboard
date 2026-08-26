@@ -23,7 +23,7 @@ import sales as sales_page
 import finance as finance_page
 import inventory as inventory_page
 
-st.set_page_config(page_title="Lumin Light Dashboard", page_icon="☀️", layout="wide")
+st.set_page_config(page_title="Lumin Light Dashboard", layout="wide")
 inject_css()
 
 top_left, top_right = st.columns([5, 1])
@@ -53,8 +53,15 @@ render_header(f"Data as of {as_of.strftime('%B %-d, %Y')}")
 # options filter every dataframe down to just that subsidiary before any
 # tab ever sees it, so no per-tab code needs to know the selector exists.
 CONSOLIDATED_LABEL = "Lumin Group Consolidated"
+# format_func only changes what's shown on the button — the value entity
+# gets set to (used below for filtering, and in sales.py for chart titles)
+# is still the full "Lumin Light USA" / "Lumin Light Nigeria" string, which
+# has to stay as-is because it's what the subsidiary column actually
+# contains in the data.
+ENTITY_SHORT_LABELS = {"Lumin Light USA": "USA", "Lumin Light Nigeria": "Nigeria"}
 entity = st.segmented_control(
     "Entity", options=[CONSOLIDATED_LABEL, "Lumin Light USA", "Lumin Light Nigeria"],
+    format_func=lambda e: ENTITY_SHORT_LABELS.get(e, e),
     default=CONSOLIDATED_LABEL, label_visibility="collapsed",
 )
 entity = entity or CONSOLIDATED_LABEL  # segmented_control can return None if de-selected
@@ -68,7 +75,7 @@ def filter_by_entity(df):
 
 sales_df, finance_df, inventory_df = filter_by_entity(sales_df), filter_by_entity(finance_df), filter_by_entity(inventory_df)
 
-tab_sales, tab_finance, tab_inventory = st.tabs(["📈 Sales", "💰 Finance", "📦 Inventory"])
+tab_sales, tab_finance, tab_inventory = st.tabs(["Sales", "Finance", "Inventory"])
 
 with tab_sales:
     sales_page.render(sales_df, finance_df, as_of, entity)
