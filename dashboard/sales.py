@@ -94,22 +94,27 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=
     df["difference_label"] = df["difference"].apply(lambda v: f"-${abs(v):,.0f}" if v < 0 else f"${v:,.0f}")
     df["goal_label"] = df["goal"].apply(lambda v: f"{money_label(v)} \U0001F3AF")  # \U0001F3AF = 🎯
     df["actual_label"] = df["actual"].apply(money_label)
-    # When actual beats goal, the solid actual bar is taller than the gray
-    # goal backdrop — so the goal label (meant to sit on light gray) ends
-    # up rendered against the dark actual-color bar instead, and a
-    # medium-gray label all but disappears there. Use a near-white color
-    # in that case instead, dark gray otherwise.
-    df["goal_label_color"] = df.apply(lambda r: "#F7F8FA" if r["actual"] >= r["goal"] else TEXT_SECONDARY, axis=1)
-    # Placing the goal label AT the goal value (like the actual label sits
-    # at the actual value) collides whenever the two are close — as they
-    # were for Q2, where goal and actual differ by only ~$100K, so both
-    # labels landed almost on top of each other near the bar's top. Anchor
-    # the goal label at a fixed fraction of whichever value is SMALLER
-    # instead — that's always safely inside the shorter bar, regardless of
-    # how close goal and actual happen to be, and it's always within the
-    # actual (colored) bar's own height whenever there's any actual value
-    # at all, which is exactly what goal_label_color is already keyed on.
-    df["goal_label_y"] = df[["goal", "actual"]].min(axis=1) * 0.55
+    # Two labels, two clearly separate zones, so they can never collide no
+    # matter which value is bigger or how close the two are:
+    #   - Goal always sits OUTSIDE any bar — anchored at whichever of
+    #     goal/actual is taller, then nudged further up. Earlier this was
+    #     anchored at the goal value itself, which put it inside the
+    #     actual-color bar whenever actual beat goal (needing a
+    #     conditional light/dark color to stay readable) — and a
+    #     since-reverted attempt anchored it at a fraction of the SMALLER
+    #     value, which fixed close-value collisions but broke the normal
+    #     case (goal clearly bigger than actual put the goal's own label
+    #     at a height with no relation to the goal value it displays).
+    #   - Actual always sits INSIDE its own bar, vertically centered —
+    #     freeing up the top entirely for the goal label, so the two
+    #     never compete for the same space regardless of the numbers.
+    df["goal_label_y"] = df[["goal", "actual"]].max(axis=1)
+    df["actual_label_y"] = df["actual"] * 0.5
+    # actual_label sits inside its own bar, which needs a light color to
+    # read against the dark fill — except when actual is 0 (no bar at
+    # all), where that same light label would sit on the page's white
+    # background and disappear. Dark text there instead.
+    df["actual_label_color"] = df["actual"].apply(lambda v: "#F7F8FA" if v > 0 else TEXT_SECONDARY)
 
     y_scale = alt.Scale(domain=[0, y_max]) if y_max else alt.Undefined
 
@@ -137,13 +142,13 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=
     # falls back to Altair's default tooltip, dumping every encoded field
     # verbatim — including internal helper columns like goal_label_color,
     # which mean nothing to a viewer.
-    goal_labels = base.mark_text(fontWeight="bold", fontSize=11).encode(
+    goal_labels = base.mark_text(dy=-10, fontWeight="bold", fontSize=11, color=TEXT_SECONDARY).encode(
         x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("goal_label_y:Q", scale=y_scale), text=alt.Text("goal_label:N"),
-        color=alt.Color("goal_label_color:N", scale=None, legend=None),
         tooltip=tooltip,
     )
-    actual_labels = base.mark_text(dy=-8, fontWeight="bold", color=actual_color, fontSize=11).encode(
-        x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("actual:Q", scale=y_scale), text=alt.Text("actual_label:N"),
+    actual_labels = base.mark_text(fontWeight="bold", fontSize=11).encode(
+        x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("actual_label_y:Q", scale=y_scale), text=alt.Text("actual_label:N"),
+        color=alt.Color("actual_label_color:N", scale=None, legend=None),
         tooltip=tooltip,
     )
     return (goal_bars + actual_bars + goal_labels + actual_labels).properties(height=height)
