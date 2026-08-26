@@ -70,8 +70,8 @@ def inject_css():
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-        html, body, [class*="css"] {{
-            font-family: 'Inter', -apple-system, sans-serif;
+        html, body, [class*="css"], [class*="st-emotion"], p, span, div, button, input, label {{
+            font-family: 'Inter', -apple-system, sans-serif !important;
         }}
         .stApp {{
             background-color: {PAGE_BG};
@@ -79,6 +79,7 @@ def inject_css():
         h1, h2, h3 {{
             color: {NAVY} !important;
             font-weight: 800 !important;
+            font-family: 'Inter', -apple-system, sans-serif !important;
         }}
         [data-testid="stMetric"] {{
             background-color: {CARD_BG};
