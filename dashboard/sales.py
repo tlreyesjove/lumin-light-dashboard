@@ -144,7 +144,7 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
             "period": str(year), "goal": annual_goal, "actual": won_ytd.deal_value.sum(),
             "pct_of_goal": (won_ytd.deal_value.sum() / annual_goal) if annual_goal else 0,
         }])
-        st.altair_chart(bullet_chart(ytd_df, "period", None, NAVY, 260, y_max=20_000_000), use_container_width=True)
+        st.altair_chart(bullet_chart(ytd_df, "period", None, NAVY, 260, y_max=annual_goal + 5_000_000), use_container_width=True)
 
     with row1_right:
         st.markdown("**Sales by Quarter**")
