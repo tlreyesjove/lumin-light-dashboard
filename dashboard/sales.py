@@ -5,12 +5,16 @@ Sales pillar, split into two sections per Tatiana's request:
   Sales YTD (actual vs. annual goal), Sales by Quarter (actual vs. each
   quarter's goal), Sales by Channel (Institutional vs. Commercial share),
   and Win/Loss Rate (a diverging bar, by deal count: won / (won + lost)).
-- Pipeline — what's still open, as 5 scorecards (Weighted Pipeline, Open
-  Deals, Avg. Sales Cycle, Avg. Order Value, Revenue Forecast) plus a
-  Revenue Forecast by Month chart (Open by expected close date vs. Won by
-  actual close date, both weighted, monthly and NOT cumulative, starting
-  this month rather than January — modeled on a Pipedrive forecast report
-  Tatiana shared).
+- Pipeline — what's still open, as 4 scorecards (Revenue Forecast /
+  Weighted Pipeline, Open Deals, Avg. Sales Cycle, Avg. Order Value) plus
+  a Revenue Forecast by Month chart (Open by expected close date vs. Won
+  by actual close date, both weighted, monthly and NOT cumulative,
+  starting this month rather than January — modeled on a Pipedrive
+  forecast report Tatiana shared). There's deliberately no separate
+  "Revenue Forecast" scorecard distinct from Weighted Pipeline — an
+  earlier version had one that quietly folded in this month's already-Won
+  revenue, which read as forward-looking while actually mixing in the
+  past.
 
 Goals (in the bullet-style charts) come from the Finance tab's
 budget_revenue — annual and quarterly totals are both just sums of that
@@ -301,10 +305,9 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
     # --- Pipeline -----------------------------------------------------------
     st.subheader("Pipeline")
 
-    # Forecast data is built here, before the scorecards, because one of
-    # the scorecards (Revenue Forecast) is just this same data totaled up
-    # — computing it once and reusing it for both the scorecard and the
-    # chart below keeps the two numbers guaranteed to agree.
+    # Forecast data (used by the chart further down) is built here, before
+    # the scorecards, just so the whole Pipeline section reads top to
+    # bottom in the order things are computed.
     #
     # Starts at the CURRENT month, not Jan 1 — a forecast should look
     # ahead, not dwell on months that have already happened. This means
@@ -315,8 +318,7 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
     # forward entries; won_grouped can have earlier months too (deals
     # actually won back in January, say), which is exactly why the loop
     # below only pulls from forecast_months rather than summing the whole
-    # year — that's what keeps prior months' Won revenue out of both the
-    # chart and the "Revenue Forecast" scorecard total.
+    # year — that keeps prior months' Won revenue out of the chart.
     forecast_months = pd.date_range(f"{year}-{as_of.month:02d}-01", f"{year}-12-01", freq="MS")
     current_month_label = forecast_months[0].strftime("%b %Y")
 
@@ -345,12 +347,17 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
     forecast_df = pd.DataFrame(forecast_rows)
     month_order = [m.strftime("%b %Y") for m in forecast_months]
     forecast_colors = {"Open": PRODUCT_COLORS["Sol 1"], "Won": NAVY}
-    revenue_forecast_total = forecast_df.value.sum()
 
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4 = st.columns(4)
     annual_target = finance_df[finance_df.month.str.startswith(str(year))].budget_revenue.sum()
     weighted_pipeline = open_deals.weighted_value.sum()
-    col1.metric("Weighted Pipeline", f"${weighted_pipeline:,.0f}",
+    # Named "Revenue Forecast / Weighted Pipeline" rather than having two
+    # separate scorecards — a standalone "Revenue Forecast" number that
+    # quietly folded in this month's already-Won revenue read as a
+    # forward-looking forecast while actually mixing in the past, which
+    # was confusing. This is just the open pipeline, weighted by
+    # probability — the only genuinely forward-looking total.
+    col1.metric("Revenue Forecast / Weighted Pipeline", f"${weighted_pipeline:,.0f}",
                 f"{weighted_pipeline/annual_target:.0%} of annual target" if annual_target else None,
                 delta_color="off")
 
@@ -372,10 +379,6 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
         col4.metric("Avg. Order Value (YTD)", f"${won_ytd.deal_value.mean():,.0f}")
     else:
         col4.metric("Avg. Order Value (YTD)", "—")
-
-    # Revenue Forecast: everything from the current month forward — same
-    # total as the chart below, not a separate calculation.
-    col5.metric("Revenue Forecast", f"${revenue_forecast_total:,.0f}")
 
     st.markdown("**Revenue Forecast by Month**")
 
