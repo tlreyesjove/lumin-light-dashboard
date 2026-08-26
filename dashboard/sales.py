@@ -56,7 +56,7 @@ def money_label(v):
     return f"${v/1_000:,.0f}K"
 
 
-def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None):
+def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=None):
     """Shared "actual vs. goal" bar: a light gray bar sized to the goal,
     with a colored bar for the actual value drawn on top of it — same
     idea as Tatiana's reference screenshots (a target bracket behind a
@@ -77,6 +77,14 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None):
     df["difference_label"] = df["difference"].apply(lambda v: f"-${abs(v):,.0f}" if v < 0 else f"${v:,.0f}")
     df["goal_label"] = df["goal"].apply(lambda v: f"{money_label(v)} \U0001F3AF")  # \U0001F3AF = 🎯
     df["actual_label"] = df["actual"].apply(money_label)
+    # When actual beats goal, the solid actual bar is taller than the gray
+    # goal backdrop — so the goal label (meant to sit on light gray) ends
+    # up rendered against the dark actual-color bar instead, and a
+    # medium-gray label all but disappears there. Use a near-white color
+    # in that case instead, dark gray otherwise.
+    df["goal_label_color"] = df.apply(lambda r: "#F7F8FA" if r["actual"] >= r["goal"] else TEXT_SECONDARY, axis=1)
+
+    y_scale = alt.Scale(domain=[0, y_max]) if y_max else alt.Undefined
 
     tooltip = [
         alt.Tooltip(f"{x_field}:N", title=x_title or " "),
@@ -89,19 +97,20 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None):
     base = alt.Chart(df)
     goal_bars = base.mark_bar(size=52, cornerRadiusTopLeft=4, cornerRadiusTopRight=4, color=GOAL_COLOR).encode(
         x=alt.X(f"{x_field}:N", title=x_title, sort=x_sort, axis=alt.Axis(labelAngle=0)),
-        y=alt.Y("goal:Q", title="Deal Value ($)"),
+        y=alt.Y("goal:Q", title="Sales ($)", scale=y_scale),
         tooltip=tooltip,
     )
     actual_bars = base.mark_bar(size=52, cornerRadiusTopLeft=4, cornerRadiusTopRight=4, color=actual_color).encode(
         x=alt.X(f"{x_field}:N", sort=x_sort),
-        y=alt.Y("actual:Q"),
+        y=alt.Y("actual:Q", scale=y_scale),
         tooltip=tooltip,
     )
-    goal_labels = base.mark_text(dy=-10, fontWeight="bold", color=TEXT_SECONDARY, fontSize=11).encode(
-        x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("goal:Q"), text=alt.Text("goal_label:N"),
+    goal_labels = base.mark_text(dy=-10, fontWeight="bold", fontSize=11).encode(
+        x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("goal:Q", scale=y_scale), text=alt.Text("goal_label:N"),
+        color=alt.Color("goal_label_color:N", scale=None, legend=None),
     )
     actual_labels = base.mark_text(dy=-8, fontWeight="bold", color=actual_color, fontSize=11).encode(
-        x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("actual:Q"), text=alt.Text("actual_label:N"),
+        x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("actual:Q", scale=y_scale), text=alt.Text("actual_label:N"),
     )
     return (goal_bars + actual_bars + goal_labels + actual_labels).properties(height=height)
 
@@ -128,7 +137,7 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
             "period": str(year), "goal": annual_goal, "actual": won_ytd.deal_value.sum(),
             "pct_of_goal": (won_ytd.deal_value.sum() / annual_goal) if annual_goal else 0,
         }])
-        st.altair_chart(bullet_chart(ytd_df, "period", None, NAVY, 260), use_container_width=True)
+        st.altair_chart(bullet_chart(ytd_df, "period", None, NAVY, 260, y_max=20_000_000), use_container_width=True)
 
     with row1_right:
         st.markdown("**Sales by Quarter**")

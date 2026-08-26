@@ -1,0 +1,8 @@
+# Streamlit's default accent color is red — this overrides it to the
+# Lumin Light brand's Navy Primary, which is what colors every "selected/
+# active" UI state: the entity selector's selected pill, the active tab's
+# underline and text, buttons, etc. This is the supported way to do this
+# (rather than fragile CSS overrides chasing Streamlit's internal class
+# names, which can change between versions).
+[theme]
+primaryColor = "#0B1F3A"

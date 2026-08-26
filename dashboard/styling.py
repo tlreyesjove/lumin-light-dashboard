@@ -85,6 +85,15 @@ def inject_css():
             color: {NAVY} !important;
             font-weight: 700 !important;
         }}
+        /* Bold whichever entity/tab is currently selected — covers both
+           the tab bar (role="tab", aria-selected) and the entity selector
+           (a segmented_control button whose kind flips to *Active when
+           selected). The text sits in a nested <p>, which has its own
+           font-weight that overrides the button's unless targeted directly. */
+        [role="tab"][aria-selected="true"], [role="tab"][aria-selected="true"] p,
+        button[kind="segmented_controlActive"], button[kind="segmented_controlActive"] p {{
+            font-weight: 700 !important;
+        }}
         .lumin-header {{
             display: flex;
             justify-content: space-between;
