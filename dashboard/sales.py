@@ -4,7 +4,7 @@ Sales pillar, split into two sections per Tatiana's request:
 - Sales Performance — what's already happened, as 4 report panels:
   Sales YTD (actual vs. annual goal), Sales by Quarter (actual vs. each
   quarter's goal), Sales by Channel (Institutional vs. Commercial share),
-  and Win/Loss Rate (a diverging bar, revenue-weighted).
+  and Win/Loss Rate (a diverging bar, by deal count: won / (won + lost)).
 - Pipeline — what's still open: weighted pipeline value by stage, and
   what's expected to close this quarter.
 
@@ -30,7 +30,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from styling import PRODUCT_COLORS, CLIENT_TYPE_COLORS, STAGE_ORDER, STATUS_GOOD, STATUS_CRITICAL, NAVY, AMBER, TEXT_SECONDARY, BORDER
+from styling import PRODUCT_COLORS, CLIENT_TYPE_COLORS, WIN_LOSS_COLORS, STAGE_ORDER, NAVY, AMBER, TEXT_SECONDARY, BORDER
 
 GOAL_COLOR = BORDER
 
@@ -161,44 +161,54 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
         total_rev = by_client_type.revenue.sum()
         by_client_type["pct"] = by_client_type.revenue / total_rev if total_rev else 0
         by_client_type["label"] = by_client_type.apply(
-            lambda r: f"${r.revenue/1000:,.0f}K ({r.pct:.0%})", axis=1)
+            lambda r: f"{money_label(r.revenue)} ({r.pct:.0%})", axis=1)
         base = alt.Chart(by_client_type).encode(
             theta=alt.Theta("revenue:Q", stack=True),
             color=alt.Color("client_type:N", title=None, scale=alt.Scale(
                 domain=list(CLIENT_TYPE_COLORS), range=list(CLIENT_TYPE_COLORS.values())),
-                legend=alt.Legend(orient="bottom")),
+                legend=alt.Legend(orient="bottom", symbolType="circle")),
             tooltip=[alt.Tooltip("client_type:N", title="Client Type"),
                      alt.Tooltip("revenue:Q", title="Revenue", format="$,.0f"),
                      alt.Tooltip("pct:Q", title="Share", format=".0%")],
         )
-        donut = base.mark_arc(innerRadius=60, cornerRadius=3)
-        donut_labels = base.mark_text(radius=100, fontWeight="bold", fontSize=11, color=TEXT_SECONDARY).encode(text="label:N")
-        st.altair_chart((donut + donut_labels).properties(height=260), use_container_width=True)
-        st.caption("Institutional = Government, NGO, Multilateral. Commercial = Distributor (resellers).")
+        donut = base.mark_arc(innerRadius=45, outerRadius=65, cornerRadius=3)
+        donut_labels = base.mark_text(radius=82, fontWeight="bold", fontSize=11, color=TEXT_SECONDARY).encode(text="label:N")
+        st.altair_chart(
+            (donut + donut_labels).properties(height=260, padding={"left": 55, "right": 55, "top": 10, "bottom": 10}),
+            use_container_width=True,
+        )
+        st.caption("Institutional: government, NGO, multilateral")
+        st.caption("Commercial: distributors, resellers")
 
     with row2_right:
         st.markdown("**Win/Loss Rate**")
-        win_amt = won_deals.deal_value.sum()
-        loss_amt = lost_deals.deal_value.sum()
-        total_amt = win_amt + loss_amt
+        # Win rate = won deals / (won + lost) deals — a count, not a dollar
+        # weighting. Loss rate is the same denominator with lost as the
+        # numerator, so the two always add to exactly 100%.
+        n_won, n_lost = len(won_deals), len(lost_deals)
+        n_closed = n_won + n_lost
+        win_amt, loss_amt = won_deals.deal_value.sum(), lost_deals.deal_value.sum()
         wl_df = pd.DataFrame([
-            {"label": entity_label, "outcome": "Win", "pct": (win_amt / total_amt) if total_amt else 0, "amount": win_amt},
-            {"label": entity_label, "outcome": "Loss", "pct": -(loss_amt / total_amt) if total_amt else 0, "amount": loss_amt},
+            {"label": entity_label, "outcome": "Win", "pct": (n_won / n_closed) if n_closed else 0,
+             "count": n_won, "amount": win_amt},
+            {"label": entity_label, "outcome": "Loss", "pct": -(n_lost / n_closed) if n_closed else 0,
+             "count": n_lost, "amount": loss_amt},
         ])
         wl_chart = alt.Chart(wl_df).mark_bar(size=80, cornerRadius=4).encode(
             x=alt.X("label:N", title=None, axis=alt.Axis(labelAngle=0)),
             y=alt.Y("pct:Q", title=None, axis=alt.Axis(format="%")),
             color=alt.Color("outcome:N", title=None, scale=alt.Scale(
-                domain=["Win", "Loss"], range=[STATUS_GOOD, STATUS_CRITICAL]), legend=alt.Legend(orient="bottom")),
+                domain=list(WIN_LOSS_COLORS), range=list(WIN_LOSS_COLORS.values())),
+                legend=alt.Legend(orient="bottom", symbolType="circle")),
             tooltip=[alt.Tooltip("outcome:N", title="Outcome"),
                      alt.Tooltip("pct:Q", title="Rate", format=".1%"),
+                     alt.Tooltip("count:Q", title="Deals", format=",.0f"),
                      alt.Tooltip("amount:Q", title="Value", format="$,.0f")],
         )
         wl_labels = alt.Chart(wl_df).mark_text(fontWeight="bold", fontSize=12, dy=alt.expr("datum.pct > 0 ? -8 : 14")).encode(
             x=alt.X("label:N"), y=alt.Y("pct:Q"), text=alt.Text("pct:Q", format=".0%"),
         )
         st.altair_chart((wl_chart + wl_labels).properties(height=260), use_container_width=True)
-        st.caption(f"All-time, revenue-weighted — {len(won_deals)} won / {len(lost_deals)} lost, total ${total_amt:,.0f} closed.")
 
     st.divider()
 

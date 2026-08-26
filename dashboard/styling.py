@@ -52,6 +52,15 @@ CLIENT_TYPE_COLORS = {
     "Commercial": AMBER,
 }
 
+# Muted win/loss colors, per Tatiana — softer than the Inventory tab's
+# STATUS_GOOD/STATUS_CRITICAL (which stay bright/saturated, reserved for
+# reorder alerts). Deliberately a separate pair, not a reuse of those
+# tokens, so changing this doesn't also change Inventory's alert colors.
+WIN_LOSS_COLORS = {
+    "Win": "#71AE79",
+    "Loss": "#FB8B80",
+}
+
 STAGE_ORDER = ["Prospecting", "Qualification", "Proposal", "Negotiation"]
 
 
