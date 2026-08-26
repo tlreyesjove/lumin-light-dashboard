@@ -172,7 +172,15 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
                      alt.Tooltip("pct:Q", title="Share", format=".0%")],
         )
         pie = base.mark_arc(outerRadius=65)
-        pie_labels = base.mark_text(radius=82, fontWeight="bold", fontSize=11, color=TEXT_SECONDARY).encode(text="label:N")
+        # color=alt.value(...) is required, not the mark-level color=
+        # property — pie_labels shares `base`'s color-by-client_type
+        # ENCODING, which otherwise overrides any mark property and makes
+        # each label render in its own slice's color (amber text on an
+        # amber slice is nearly invisible — exactly the "hidden behind
+        # the chart" look Tatiana flagged).
+        pie_labels = base.mark_text(radius=100, fontWeight="bold", fontSize=11).encode(
+            text="label:N", color=alt.value(TEXT_SECONDARY),
+        )
         st.altair_chart(
             (pie + pie_labels).properties(height=260, padding={"left": 55, "right": 55, "top": 10, "bottom": 10}),
             use_container_width=True,
