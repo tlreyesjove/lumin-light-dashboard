@@ -423,6 +423,20 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
         open_deals[display_cols].sort_values("expected_close_date"),
         use_container_width=True, hide_index=True,
         column_config={
+            # Labels only — the underlying column names (subsidiary,
+            # buyer_type, etc.) stay as-is, since those same names are
+            # relied on for filtering/joins elsewhere in Sales, Finance,
+            # and Inventory (e.g. Inventory's reorder alert filters on
+            # open_deals["product"]). Renaming the real columns would mean
+            # updating the generator scripts, the Google Sheet, and every
+            # tab that reads them — this table is a display-only concern.
+            "deal_id": st.column_config.TextColumn("Deal ID"),
+            "subsidiary": st.column_config.TextColumn("Entity"),
+            "buyer_type": st.column_config.TextColumn("Customer Category"),
+            "client_type": st.column_config.TextColumn("Channel"),
+            "buyer_name": st.column_config.TextColumn("Customer"),
+            "product": st.column_config.TextColumn("Product"),
+            "stage": st.column_config.TextColumn("Pipeline Stage"),
             "deal_value": st.column_config.NumberColumn("Deal Value", format="$%,.0f"),
             "probability": st.column_config.NumberColumn("Probability", format="%.0%%"),
             "weighted_value": st.column_config.NumberColumn("Weighted Value", format="$%,.0f"),
