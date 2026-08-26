@@ -189,13 +189,18 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
         st.caption("Commercial: distributors, resellers")
 
     with row2_right:
-        st.markdown("**Win/Loss Rate**")
+        st.markdown("**Win/Loss Rate (YTD)**")
+        # Scoped to the current year — won_deals/lost_deals on their own
+        # are all-time (2025 + 2026 combined), which is why an earlier
+        # version of this showed a much bigger dollar figure than expected
+        # on hover. won_ytd already exists above; lost needs the same filter.
+        lost_ytd = lost_deals[lost_deals.actual_close_date.dt.year == year]
         # Win rate = won deals / (won + lost) deals — a count, not a dollar
         # weighting. Loss rate is the same denominator with lost as the
         # numerator, so the two always add to exactly 100%.
-        n_won, n_lost = len(won_deals), len(lost_deals)
+        n_won, n_lost = len(won_ytd), len(lost_ytd)
         n_closed = n_won + n_lost
-        win_amt, loss_amt = won_deals.deal_value.sum(), lost_deals.deal_value.sum()
+        win_amt, loss_amt = won_ytd.deal_value.sum(), lost_ytd.deal_value.sum()
         wl_df = pd.DataFrame([
             {"label": entity_label, "outcome": "Win", "pct": (n_won / n_closed) if n_closed else 0,
              "count": n_won, "amount": win_amt},
