@@ -95,6 +95,18 @@ def inject_css():
             color: {NAVY} !important;
             font-weight: 700 !important;
         }}
+        /* st.metric's delta always ships with a colored up/down arrow glyph
+           next to the text — delta_color="off" removes the red/green color
+           but not the arrow itself. Hiding the icon here (not just muting
+           its color) is the only way to get delta text with no arrow at
+           all, for cases like "% of annual target" that aren't a
+           good/bad comparison and shouldn't look like one. */
+        [data-testid="stMetricDelta"] svg {{
+            display: none;
+        }}
+        [data-testid="stMetricDelta"] {{
+            color: {TEXT_SECONDARY} !important;
+        }}
         /* Bold whichever entity/tab is currently selected — covers both
            the tab bar (role="tab", aria-selected) and the entity selector
            (a segmented_control button whose kind flips to *Active when
