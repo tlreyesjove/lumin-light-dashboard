@@ -81,6 +81,24 @@ def read_annual_budget():
     return result
 
 
+def read_channel_targets():
+    """Returns {(subsidiary, channel): target_dollars} for FY2026 — each
+    subsidiary's annual revenue target (Assumptions D6/D7) split by
+    Institutional/Commercial % (the Assumptions tab's Channel Revenue
+    Target Split section, C48:D49). A change to either the overall
+    target or the split % flows through automatically; nothing here is
+    a second copy of either number."""
+    wb = openpyxl.load_workbook(_MODEL_PATH, data_only=True)
+    a = wb["Assumptions"]
+    annual_target_2026 = _REVENUE_TARGETS[2026]
+    pct_row = {"Lumin Light USA": 48, "Lumin Light Nigeria": 49}
+    result = {}
+    for subsidiary, row in pct_row.items():
+        result[(subsidiary, "Institutional")] = annual_target_2026[subsidiary] * a.cell(row=row, column=3).value
+        result[(subsidiary, "Commercial")] = annual_target_2026[subsidiary] * a.cell(row=row, column=4).value
+    return result
+
+
 def read_cost_structure():
     """Building blocks for computing ACTUAL Opex the same way the financial
     model computes BUDGET Opex — fixed costs (salaries, rent, etc.) spread

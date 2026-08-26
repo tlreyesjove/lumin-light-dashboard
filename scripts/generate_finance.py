@@ -123,6 +123,25 @@ def generate_finance_data(sales_df=None):
     df["budget_revenue"] = df.apply(lambda r: monthly_budget[(r["subsidiary"], r["month"])]["budget_revenue"], axis=1)
     df["budget_ebit"] = df.apply(lambda r: monthly_budget[(r["subsidiary"], r["month"])]["budget_ebit"], axis=1)
 
+    # Channel (Institutional/Commercial) revenue targets — same "read the
+    # ANNUAL number, spread it flat across 12 months" approach as the rest
+    # of this file's budget columns, so summing either column back over a
+    # year reconstructs the real annual target exactly. 2026-only, like
+    # the quarterly target split — 2025 rows get NaN, since there's no
+    # channel target for a year that's already closed out. There's no
+    # monthly channel seasonality assumption (that would be over-building
+    # for what's just a YTD-vs-annual-target gauge, not a monthly chart),
+    # so the flat spread is a deliberate simplification, not an oversight.
+    channel_targets = config.read_channel_targets()
+
+    def channel_target_monthly(row, channel):
+        if not row["month"].startswith("2026"):
+            return None
+        return channel_targets[(row["subsidiary"], channel)] / 12
+
+    df["budget_institutional_revenue"] = df.apply(lambda r: channel_target_monthly(r, "Institutional"), axis=1)
+    df["budget_commercial_revenue"] = df.apply(lambda r: channel_target_monthly(r, "Commercial"), axis=1)
+
     df = df.sort_values(["subsidiary", "month"]).reset_index(drop=True)
 
     # Cash balance: collections lag revenue by one month (AR_LAG_DAYS ~ 1 month),

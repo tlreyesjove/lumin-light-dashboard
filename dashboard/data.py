@@ -54,6 +54,7 @@ def load_data():
 
     finance = data["finance"]
     for col in ["revenue", "cogs", "opex", "ebit", "budget_revenue", "budget_ebit",
+                "budget_institutional_revenue", "budget_commercial_revenue",
                 "net_cash_change", "cash_balance"]:
         finance[col] = pd.to_numeric(finance[col], errors="coerce")
 

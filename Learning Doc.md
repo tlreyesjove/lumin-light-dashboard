@@ -531,3 +531,69 @@ possibly close. Now only deals expected to close within
 `REORDER_LOOKAHEAD_MONTHS` (1 month — matching `AVG_LEAD_TIME_MONTHS`,
 the same lead-time assumption `reorder_point` itself is built on) count
 toward the alert.
+
+### 3.4 — Channel revenue targets, and a genuinely tricky rendering bug
+
+You wanted each Channel (Institutional/Commercial) to have its own
+target, with progress shown against it — same idea as the quarterly
+targets in 2.5, applied to a different cut of revenue. Same principle
+applied again: a target needs to be a real planning input someone
+actually chose, not something invented on the fly. So the % splits
+(USA 55% Institutional / 45% Commercial, Nigeria 50/50) were picked by
+looking at where each subsidiary's *actual* 2026 channel mix already
+sits (USA running ~56/44, Nigeria ~49/51) — a believable near-term goal
+instead of an arbitrary number that would've made the resulting gauges
+either trivially "done" or absurdly far off on day one.
+
+Mechanically this followed the exact same pattern as the quarterly
+target: a new "Channel Revenue Target Split" section on the Assumptions
+tab (appended after the existing Starting Cash Balance section, not
+inserted earlier — inserting rows would've shifted every fixed cell
+reference `config.py` already depends on, like `C15` for the benefits
+loading %). `config.read_channel_targets()` reads those percentages and
+multiplies them against each subsidiary's existing annual revenue
+target, so the dollar figures are never a second copy of a number that
+lives elsewhere. From there it flows exactly like `budget_revenue`
+already does: `generate_finance.py` spreads the annual target flat
+across 12 months into two new Finance-tab columns
+(`budget_institutional_revenue`, `budget_commercial_revenue`, 2026 only
+— matching the quarterly target's "this year only" scope), and the
+dashboard sums that column back over the year to get the annual figure,
+same "sum the monthly column" trick used everywhere else on this tab.
+
+The chart itself — a semicircular gauge per channel, prototyped first in
+a disposable test app before touching the real dashboard — worked on the
+first real attempt (Vega-Lite arc marks stack into a half-circle by
+setting `theta`'s scale range to `[-π/2, π/2]` instead of the usual full
+circle, the same mechanics as a donut chart just rotated into a dome).
+The hard part came after: switching the entity selector between
+Consolidated/USA/Nigeria intermittently left one or both gauges
+completely blank — no error banner, nothing in the UI, just an empty
+arc. Chasing it down: the browser console showed a recurring
+"Unrecognized data set" error from Vega-Embed on every entity switch,
+and inspecting a blank gauge's actual SVG showed the mark *groups*
+existed (Vega had built the scene graph) but were empty — no `<path>`,
+no `<text>`. That's consistent with Streamlit trying to *patch* an
+existing chart's live Vega view in place across a rerun (swap in new
+data by name) rather than fully rebuilding it, and the patch silently
+failing to find the dataset it expected.
+
+The fix was changing how the gauge's Altair spec was put together, not
+the data itself: the first version layered three *separate*
+`alt.Chart(...)` objects (the arc, the big percentage text, the small
+title text), each built from its own tiny one-off DataFrame — three
+distinct datasets in one layered spec. Every other multi-layer chart on
+this tab (the bullet charts, the channel pie) instead builds every layer
+off *one* shared `base = alt.Chart(df)`, filtering down to one row for
+text layers with `transform_filter` where needed (the same technique
+`bullet_chart`'s inside/outside actual-value labels already used).
+Rebuilding the gauge the same way — one shared dataset, `transform_filter`
+for the text — made the blanking disappear completely across repeated
+entity switches, including rapid back-to-back clicks. Never fully
+confirmed *why* three-datasets-in-one-spec specifically breaks
+Streamlit's patch path and one-dataset doesn't (that's Streamlit/
+vega-embed internals, not something worth chasing further for this
+project) — but the fix is consistent with every other layered chart in
+this codebase already following the "one shared base dataset" pattern,
+which in hindsight was already the established convention here for a
+reason.

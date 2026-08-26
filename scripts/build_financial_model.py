@@ -168,6 +168,36 @@ def build_assumptions(wb):
     set(ws, cash_row1 + 1, 2, "Lumin Light Nigeria")
     set(ws, cash_row1 + 1, 3, 2200000, BLUE, USD_FMT, YELLOW_FILL)
 
+    # Channel revenue target split, 2026 only — same idea as the quarterly
+    # split above (a real planning input, not derived math), except this
+    # one varies BY SUBSIDIARY rather than being one global set of %s, so
+    # each subsidiary gets its own row and its own check formula instead
+    # of one shared check row. Set to land close to where each
+    # subsidiary's actual 2026 channel mix already is (USA ~56%
+    # Institutional / 44% Commercial, Nigeria ~49% / 51%) — a target
+    # that's a believable near-term goal, not a number pulled from thin
+    # air. Appended after the cash section (not inserted earlier) so
+    # nothing above shifts and no other formula's cell reference breaks.
+    chan_header_row = cash_row1 + 3
+    chan_label_row = chan_header_row + 1
+    chan_usa_row = chan_label_row + 1
+    chan_nga_row = chan_usa_row + 1
+    set(ws, chan_header_row, 2, "CHANNEL REVENUE TARGET SPLIT — 2026 (% of Annual Revenue, by Subsidiary)", SECTION_FONT)
+    set(ws, chan_label_row, 2, "Subsidiary", BLACK_BOLD)
+    set(ws, chan_label_row, 3, "Institutional", BLACK_BOLD)
+    set(ws, chan_label_row, 4, "Commercial", BLACK_BOLD)
+    set(ws, chan_label_row, 5, "Check", BLACK_BOLD)
+    channel_splits = {
+        "Lumin Light USA": (0.55, 0.45),
+        "Lumin Light Nigeria": (0.50, 0.50),
+    }
+    for row, subsidiary in [(chan_usa_row, "Lumin Light USA"), (chan_nga_row, "Lumin Light Nigeria")]:
+        inst_pct, comm_pct = channel_splits[subsidiary]
+        set(ws, row, 2, subsidiary)
+        set(ws, row, 3, inst_pct, BLUE, PCT_FMT, YELLOW_FILL)
+        set(ws, row, 4, comm_pct, BLUE, PCT_FMT, YELLOW_FILL)
+        set(ws, row, 5, f"=C{row}+D{row}", None, PCT_FMT)
+
     return {
         "revenue_row": {"Lumin Light USA": 6, "Lumin Light Nigeria": 7},
         "gross_margin_cell": "C11",
@@ -181,6 +211,7 @@ def build_assumptions(wb):
         "quarterly_pct_row": q_pct_row,  # columns C-F = Q1-Q4, 2026 only
         "ar_lag_cell": f"C{ar_row}",
         "cash_row": {"Lumin Light USA": cash_row1, "Lumin Light Nigeria": cash_row1 + 1},
+        "channel_target_row": {"Lumin Light USA": chan_usa_row, "Lumin Light Nigeria": chan_nga_row},
     }
 
 

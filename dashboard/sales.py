@@ -3,8 +3,11 @@ Sales pillar, split into two sections per Tatiana's request:
 
 - Sales Performance — what's already happened, as 4 report panels:
   Sales YTD (actual vs. annual goal), Sales by Quarter (actual vs. each
-  quarter's goal), Sales by Channel (Institutional vs. Commercial share),
-  and Win/Loss Rate (a diverging bar, by deal count: won / (won + lost)).
+  quarter's goal), Sales by Channel (Institutional vs. Commercial share,
+  as a pie — plus two semicircular gauges underneath, in the same
+  bordered container, showing each channel's YTD revenue against its own
+  target), and Win/Loss Rate (a diverging bar, by deal count: won /
+  (won + lost)).
 - Pipeline — what's still open, as 4 scorecards (Revenue Forecast /
   Weighted Pipeline, Open Deals, Avg. Sales Cycle, Avg. Order Value) plus
   a Revenue Forecast by Month chart (Open by expected close date vs. Won
@@ -21,7 +24,10 @@ budget_revenue — annual and quarterly totals are both just sums of that
 same column, not a separate number. Quarterly goals in particular now
 reflect the explicit 2026 quarterly target split (10/20/30/40) set in the
 financial model, not the old flat monthly seasonality curve — see
-Learning Doc 2.5.
+Learning Doc 2.5. Channel targets (the two gauges under Sales by Channel)
+work the same way, from budget_institutional_revenue/
+budget_commercial_revenue — 2026 only, since there's no channel target
+for a year that's already closed out.
 
 client_type (Institutional vs. Commercial) is a coarser rollup of
 buyer_type, generated alongside it in scripts/generate_sales.py — not
@@ -33,6 +39,8 @@ app.py by the Consolidated/USA/Nigeria entity selector — this file has
 no awareness of that filter beyond already receiving a pre-filtered
 sales_df/finance_df; `entity` is passed through only for chart labeling.
 """
+
+import math
 
 import altair as alt
 import pandas as pd
@@ -184,6 +192,62 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=
     return (goal_bars + actual_bars + goal_labels + actual_labels_inside + actual_labels_outside).properties(height=height)
 
 
+def gauge_chart(pct, actual, target, color, title, height=150):
+    """Semicircular gauge — a "value" arc over a light grey "remainder"
+    track, both stacked into a half-circle by giving theta's scale a
+    [-π/2, π/2] range instead of the usual full-circle [0, 2π]. Same
+    stacking mechanics as a donut chart (two wedges that sum to the whole),
+    just rotated into a dome instead of a full circle.
+
+    Visually capped at 100% (a >100% gauge would otherwise wrap back past
+    the dome and look broken), but the printed percentage is never capped
+    — the shape can only ever undersell an over-target channel, never
+    overstate an underperforming one.
+    """
+    pct_capped = max(0.0, min(pct, 1.0))
+    df = pd.DataFrame([
+        {"segment": "value", "amount": pct_capped, "order": 0},
+        {"segment": "remainder", "amount": 1 - pct_capped, "order": 1},
+    ])
+    # Both segments carry the same real (uncapped) figures, so hovering
+    # the grey remainder wedge shows the same useful tooltip as the
+    # colored value wedge — same reasoning as bullet_chart's shared
+    # tooltip on every layer.
+    df["channel"], df["actual"], df["target"], df["pct"] = title, actual, target, pct
+    df["pct_label"], df["title_label"] = f"{pct:.0%}", title
+    tooltip = [
+        alt.Tooltip("channel:N", title="Channel"),
+        alt.Tooltip("actual:Q", title="Actual (YTD)", format="$,.0f"),
+        alt.Tooltip("target:Q", title="Target", format="$,.0f"),
+        alt.Tooltip("pct:Q", title="% of Target", format=".0%"),
+    ]
+    # One shared `base`/dataset for all three layers (arc + both text
+    # labels), same as bullet_chart and the Sales by Channel pie —
+    # layering in separate single-row alt.Chart(...) objects for the text
+    # (each its own tiny dataset) intermittently rendered as a BLANK gauge
+    # after switching entities: Streamlit tries to patch an existing
+    # chart's Vega view in place across a rerun, and with 3 different
+    # datasets in one spec that patch could silently fail (a console
+    # "Unrecognized data set" error, no visible error in the UI, empty
+    # arc/text marks). A single shared dataset — filtered down to one row
+    # for the text layers via transform_filter, the same technique
+    # actual_labels_inside/outside above use — doesn't trigger it.
+    base = alt.Chart(df)
+    arc = base.mark_arc(innerRadius=36, outerRadius=54, cornerRadius=4).encode(
+        theta=alt.Theta("amount:Q", stack=True, scale=alt.Scale(domain=[0, 1], range=[-math.pi / 2, math.pi / 2])),
+        color=alt.Color("segment:N", scale=alt.Scale(domain=["value", "remainder"], range=[color, BORDER]), legend=None),
+        order=alt.Order("order:N"),
+        tooltip=tooltip,
+    )
+    pct_text = base.transform_filter(alt.datum.segment == "value").mark_text(
+        fontSize=16, fontWeight="bold", color=NAVY, dy=-4,
+    ).encode(text="pct_label:N", tooltip=tooltip)
+    title_text = base.transform_filter(alt.datum.segment == "value").mark_text(
+        fontSize=10, fontWeight="bold", color=TEXT_SECONDARY, dy=9,
+    ).encode(text="title_label:N", tooltip=tooltip)
+    return (arc + pct_text + title_text).properties(height=height)
+
+
 def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
     year = as_of.year
     entity_label = "Lumin Group" if entity == "Lumin Group Consolidated" else entity.replace("Lumin Light ", "")
@@ -225,10 +289,11 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
 
     row2_left, row2_right = st.columns(2)
 
-    with row2_left:
+    with row2_left, st.container(border=True):
         st.markdown("**Sales by Channel**")
         by_client_type = won_ytd.groupby("client_type").deal_value.sum().reindex(list(CLIENT_TYPE_COLORS)).reset_index()
         by_client_type.columns = ["client_type", "revenue"]
+        by_client_type["revenue"] = by_client_type["revenue"].fillna(0)
         total_rev = by_client_type.revenue.sum()
         by_client_type["pct"] = by_client_type.revenue / total_rev if total_rev else 0
         by_client_type["label"] = by_client_type.apply(
@@ -261,6 +326,45 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
         )
         st.caption("Institutional: government, NGO, multilateral")
         st.caption("Commercial: distributors, resellers")
+
+        # Channel targets, gauges below the pie in the SAME bordered
+        # container — that's what ties them together as one panel to
+        # read, rather than the gauges looking like an unrelated chart
+        # that happens to sit nearby. Targets come from the Finance tab's
+        # budget_institutional_revenue/budget_commercial_revenue (summed
+        # over the year, same "sum the monthly column" pattern as every
+        # other annual target on this tab), which in turn trace back to
+        # the Assumptions tab's Channel Revenue Target Split — not
+        # invented here.
+        st.caption("**vs. Channel Target (YTD)**")
+        channel_target = finance_df[finance_df.month.str.startswith(str(year))][
+            ["budget_institutional_revenue", "budget_commercial_revenue"]].sum()
+        target_institutional = channel_target["budget_institutional_revenue"]
+        target_commercial = channel_target["budget_commercial_revenue"]
+        actual_by_channel = by_client_type.set_index("client_type").revenue
+        actual_institutional = actual_by_channel.get("Institutional", 0)
+        actual_commercial = actual_by_channel.get("Commercial", 0)
+
+        # key= includes the rounded value, not just the entity — Streamlit
+        # otherwise sometimes tries to patch an existing gauge's Vega view
+        # in place across a rerun rather than fully remounting it, and that
+        # patch can fail silently (an "Unrecognized data set" console
+        # error, empty arc/text marks with no visible error in the UI).
+        # Keying on the value itself forces a clean remount whenever the
+        # numbers actually change, instead of patching.
+        gauge_col1, gauge_col2 = st.columns(2)
+        with gauge_col1:
+            pct_institutional = (actual_institutional / target_institutional) if target_institutional else 0
+            st.altair_chart(
+                gauge_chart(pct_institutional, actual_institutional, target_institutional, NAVY, "Institutional"),
+                use_container_width=True, key=f"gauge_institutional_{entity}_{pct_institutional:.4f}",
+            )
+        with gauge_col2:
+            pct_commercial = (actual_commercial / target_commercial) if target_commercial else 0
+            st.altair_chart(
+                gauge_chart(pct_commercial, actual_commercial, target_commercial, AMBER, "Commercial"),
+                use_container_width=True, key=f"gauge_commercial_{entity}_{pct_commercial:.4f}",
+            )
 
     with row2_right:
         st.markdown("**Win/Loss Rate YTD**")
