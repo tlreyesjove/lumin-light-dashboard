@@ -5,11 +5,11 @@ Sales pillar, split into two sections per Tatiana's request:
   Sales YTD (actual vs. annual goal), Sales by Quarter (actual vs. each
   quarter's goal), Sales by Channel (Institutional vs. Commercial share),
   and Win/Loss Rate (a diverging bar, by deal count: won / (won + lost)).
-- Pipeline — what's still open: weighted pipeline value by stage, what's
-  expected to close this quarter, and a Revenue Forecast by Month chart
-  (Open by expected close date vs. Won by actual close date, both
-  weighted, monthly and NOT cumulative — modeled on a Pipedrive forecast
-  report Tatiana shared).
+- Pipeline — what's still open, as 4 scorecards (Weighted Pipeline, Open
+  Deals, Avg. Sales Cycle, Avg. Order Value) plus a Revenue Forecast by
+  Month chart (Open by expected close date vs. Won by actual close date,
+  both weighted, monthly and NOT cumulative, starting this month rather
+  than January — modeled on a Pipedrive forecast report Tatiana shared).
 
 Goals (in the bullet-style charts) come from the Finance tab's
 budget_revenue — annual and quarterly totals are both just sums of that
@@ -33,17 +33,9 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from styling import PRODUCT_COLORS, CLIENT_TYPE_COLORS, WIN_LOSS_COLORS, STAGE_ORDER, NAVY, AMBER, TEXT_SECONDARY, BORDER
+from styling import PRODUCT_COLORS, CLIENT_TYPE_COLORS, WIN_LOSS_COLORS, NAVY, AMBER, TEXT_SECONDARY, BORDER
 
 GOAL_COLOR = BORDER
-
-
-def current_quarter_bounds(as_of):
-    q = (as_of.month - 1) // 3
-    start_month = q * 3 + 1
-    start = pd.Timestamp(year=as_of.year, month=start_month, day=1)
-    end = (start + pd.DateOffset(months=3)) - pd.DateOffset(days=1)
-    return start, end
 
 
 def quarter_bounds(year, q):
@@ -162,7 +154,9 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
     won_deals = sales_df[sales_df.status == "Won"]
     lost_deals = sales_df[sales_df.status == "Lost"]
     won_ytd = won_deals[won_deals.actual_close_date.dt.year == year]
+    lost_ytd = lost_deals[lost_deals.actual_close_date.dt.year == year]
     closed = pd.concat([won_deals, lost_deals])
+    closed_ytd = pd.concat([won_ytd, lost_ytd])
 
     # --- Sales Performance ------------------------------------------------
     st.subheader("Sales Performance")
@@ -235,8 +229,7 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
         # Scoped to the current year — won_deals/lost_deals on their own
         # are all-time (2025 + 2026 combined), which is why an earlier
         # version of this showed a much bigger dollar figure than expected
-        # on hover. won_ytd already exists above; lost needs the same filter.
-        lost_ytd = lost_deals[lost_deals.actual_close_date.dt.year == year]
+        # on hover. won_ytd/lost_ytd are computed once, near the top.
         # Win rate = won deals / (won + lost) deals — a count, not a dollar
         # weighting. Loss rate is the same denominator with lost as the
         # numerator, so the two always add to exactly 100%.
@@ -273,36 +266,45 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
 
     # --- Pipeline -----------------------------------------------------------
     st.subheader("Pipeline")
-    st.caption("Open deals — what's still ahead.")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3, col4 = st.columns(4)
     annual_target = finance_df[finance_df.month.str.startswith(str(year))].budget_revenue.sum()
     weighted_pipeline = open_deals.weighted_value.sum()
-    col1.metric("Weighted Pipeline", f"${weighted_pipeline:,.0f}",
-                f"{weighted_pipeline/annual_target:.0%} of annual target" if annual_target else None)
+    col1.metric("Weighted Pipeline", f"${weighted_pipeline:,.0f}")
+    # st.metric's delta_color="off" only removes the color, not the arrow
+    # glyph itself — there's no built-in way to show delta text with no
+    # arrow at all, so this is a plain caption underneath instead of the
+    # metric's own delta.
+    if annual_target:
+        col1.caption(f"{weighted_pipeline/annual_target:.0%} of annual target")
 
-    q_start, q_end = current_quarter_bounds(as_of)
-    closing_this_q = open_deals[
-        (open_deals.expected_close_date >= q_start) & (open_deals.expected_close_date <= q_end)
-    ]
-    col2.metric(f"Closing This Quarter (Q{(as_of.month-1)//3+1})", f"{len(closing_this_q)} deals",
-                f"${closing_this_q.deal_value.sum():,.0f} value")
+    col2.metric("Open Deals", f"{len(open_deals):,}")
 
-    st.markdown("**Weighted Pipeline Value by Stage**")
-    by_stage = open_deals.groupby("stage").weighted_value.sum().reindex(STAGE_ORDER).reset_index()
-    by_stage.columns = ["stage", "weighted_value"]
-    chart = alt.Chart(by_stage).mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4, size=48).encode(
-        x=alt.X("stage:N", sort=STAGE_ORDER, title=None, axis=alt.Axis(labelAngle=0)),
-        y=alt.Y("weighted_value:Q", title="Weighted Value ($)", axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
-        color=alt.value(NAVY),
-        tooltip=[alt.Tooltip("stage:N", title="Stage"),
-                 alt.Tooltip("weighted_value:Q", title="Weighted Value", format="$,.0f")],
-    ).properties(height=280)
-    st.altair_chart(chart, use_container_width=True)
+    # Average Sales Cycle: days from created to actual close, for deals
+    # that have actually closed (won OR lost) — scoped to this year (YTD),
+    # same reasoning as Win/Loss Rate: won_deals/lost_deals alone are
+    # all-time (2025+2026), which would silently mix in a different year.
+    if len(closed_ytd):
+        avg_cycle_days = (closed_ytd.actual_close_date - closed_ytd.created_date).dt.days.mean()
+        col3.metric("Avg. Sales Cycle (YTD)", f"{avg_cycle_days:,.0f} days")
+    else:
+        col3.metric("Avg. Sales Cycle (YTD)", "—")
+
+    # Average Order Value: average size of actual booked business (Won),
+    # not open or lost deals — also YTD, for the same reason.
+    if len(won_ytd):
+        col4.metric("Avg. Order Value (YTD)", f"${won_ytd.deal_value.mean():,.0f}")
+    else:
+        col4.metric("Avg. Order Value (YTD)", "—")
 
     st.markdown("**Revenue Forecast by Month**")
-    st.caption("Monthly, not cumulative — Open (by expected close date) vs. Won (by actual close date), both weighted.")
-    months_this_year = pd.date_range(f"{year}-01-01", f"{year}-12-01", freq="MS")
+    st.caption("Monthly, not cumulative — Open (by expected close date) vs. Won (by actual close date), both weighted. "
+               "Forward-looking: starts this month, not January.")
+    # Starts at the CURRENT month, not Jan 1 — a forecast should look
+    # ahead, not dwell on months that have already happened. This means
+    # the window naturally shrinks as the year goes on (5 months left in
+    # August, 1 month left in December) rather than always showing 12.
+    forecast_months = pd.date_range(f"{year}-{as_of.month:02d}-01", f"{year}-12-01", freq="MS")
 
     open_by_month = open_deals.copy()
     open_by_month["month"] = open_by_month.expected_close_date.dt.to_period("M").dt.to_timestamp()
@@ -313,17 +315,24 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
     won_grouped = won_by_month[won_by_month.month.dt.year == year].groupby("month").weighted_value.sum()
 
     forecast_rows = []
-    for m in months_this_year:
+    for m in forecast_months:
         label = m.strftime("%b %Y")
         forecast_rows.append({"month": label, "month_sort": m, "series": "Open", "value": open_grouped.get(m, 0.0)})
         forecast_rows.append({"month": label, "month_sort": m, "series": "Won", "value": won_grouped.get(m, 0.0)})
     forecast_df = pd.DataFrame(forecast_rows)
-    month_order = [m.strftime("%b %Y") for m in months_this_year]
+    month_order = [m.strftime("%b %Y") for m in forecast_months]
     forecast_colors = {"Open": PRODUCT_COLORS["Sol 1"], "Won": NAVY}
 
-    forecast_chart = alt.Chart(forecast_df).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3).encode(
+    # No xOffset here — with only one of the two series usually non-zero
+    # in a given month (Won for months already closed, Open for months
+    # still ahead), an xOffset grouped-bar layout put the one visible bar
+    # at the 1/4 or 3/4 mark of its month's slot instead of centered under
+    # the tick label, which is what looked "off-centered." Both series
+    # share the same x position instead; since they're rarely both
+    # meaningfully non-zero in the same month, they don't actually
+    # obscure each other in practice.
+    forecast_chart = alt.Chart(forecast_df).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3, size=36).encode(
         x=alt.X("month:N", title=None, sort=month_order, axis=alt.Axis(labelAngle=0)),
-        xOffset=alt.XOffset("series:N", sort=["Open", "Won"]),
         y=alt.Y("value:Q", title="Weighted Value ($)", axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
         color=alt.Color("series:N", title=None, scale=alt.Scale(
             domain=["Open", "Won"], range=[forecast_colors["Open"], forecast_colors["Won"]]),
