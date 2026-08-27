@@ -197,10 +197,10 @@ def render(sales_df, finance_df, ar_df, as_of):
     # year business, not a high-volume one) that an all-time average is
     # the more statistically stable read of "how long we actually take
     # to get paid," not a noisier last-few-months slice.
-    paid = ar_df[ar_df.status == "Paid"]
+    paid = ar_df[ar_df.payment_status == "Paid"]
     dso = (paid.paid_date - paid.issue_date).dt.days.mean() if len(paid) else None
 
-    ar_overdue = ar_df[ar_df.status == "Overdue"].amount.sum()
+    ar_overdue = ar_df[ar_df.payment_status == "Overdue"].amount.sum()
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Cash Balance", f"${latest_cash:,.0f}", f"as of {latest_month}")
@@ -301,8 +301,8 @@ def render(sales_df, finance_df, ar_df, as_of):
 
     # --- AR Aging Detail --------------------------------------------------
     st.markdown("**AR Aging Detail**")
-    outstanding = ar_df[ar_df.status != "Paid"].sort_values("days_overdue", ascending=False)
-    display_cols = ["invoice_id", "subsidiary", "buyer_type", "buyer_name", "amount", "days_overdue", "status"]
+    outstanding = ar_df[ar_df.payment_status != "Paid"].sort_values("days_overdue", ascending=False)
+    display_cols = ["invoice_id", "subsidiary", "buyer_type", "buyer_name", "amount", "days_overdue", "payment_status"]
     st.dataframe(
         outstanding[display_cols],
         use_container_width=True, hide_index=True,
@@ -313,6 +313,6 @@ def render(sales_df, finance_df, ar_df, as_of):
             "buyer_name": st.column_config.TextColumn("Customer"),
             "amount": st.column_config.NumberColumn("Amount", format="dollar", step=1),
             "days_overdue": st.column_config.NumberColumn("Days Overdue", format="localized"),
-            "status": st.column_config.TextColumn("Status"),
+            "payment_status": st.column_config.TextColumn("Payment Status"),
         },
     )

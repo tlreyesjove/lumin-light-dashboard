@@ -86,4 +86,4 @@ with tab_finance:
     finance_page.render(sales_df, finance_df, ar_df, as_of)
 
 with tab_inventory:
-    inventory_page.render(sales_df, inventory_df, as_of)
+    inventory_page.render(sales_df, inventory_df, ar_df, as_of)

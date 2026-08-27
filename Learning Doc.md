@@ -656,3 +656,34 @@ in a specific way ("always lower," "always a subset of"), verify that
 relationship holds on real generated data before trusting the chart —
 the code can run cleanly and still produce a number that's directionally
 backwards.
+
+### 3.6 — Delivery status: a second, separate status on the AR tab
+
+Tatiana wanted a way to see which Closed Won deals are still being
+fulfilled — a real gap, since the AR tab's existing `status` column only
+ever meant PAYMENT status (Paid/Current/Overdue). Her explicit call: keep
+Inventory simple (on-hand stock, full stop — not netted against in-flight
+commitments the way a real fulfillment system like SOS would track it;
+that level of detail belongs to Ops, not this view). So the only change
+needed was on the AR tab: rename the ambiguous `status` column to
+`payment_status`, and add a genuinely separate `delivery_status`
+(Delivered/Open) next to it — a deal can be delivered but not yet paid,
+or vice versa, so these had to be two independent fields, not one.
+
+Modeling delivery timing: since invoicing already happens some days
+after a deal closes (`INVOICE_LAG_DAYS_RANGE`, framed from the start as
+"delivery/commissioning takes real time" — i.e., delivery happens BEFORE
+invoicing), delivery date is just some fraction of that same window
+(`DELIVERY_LAG_FRACTION_RANGE`) rather than a whole new, unrelated lag.
+First attempt used a 0.4-0.8 fraction and got zero "Open" invoices —
+the same lesson as the AR aging table earlier: with only ~32 deals a
+year, a short lag window resolves too fast for many to still be
+mid-flight on any given day. Widening to 0.7-1.0 (delivery happens
+close to invoicing, not soon after closing) gave a small, believable
+population — the 3 most recently closed deals — which is exactly the
+right shape for a report like this: it should normally be a short list.
+
+The new "Sales in Fulfillment" table lives on the Inventory tab, not
+Finance — Tatiana's framing was specifically "let the team know what's
+in the process of being fulfilled," an operations question, even though
+the underlying data comes from the AR tab.

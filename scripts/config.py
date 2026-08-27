@@ -307,6 +307,13 @@ PAYMENT_LAG_DAYS = {
     "Commercial": (35, 12),
 }
 
+# Delivery happens BEFORE invoicing (real goods ship, then get billed) —
+# modeled as some fraction of the same close-to-invoice window
+# (INVOICE_LAG_DAYS_RANGE) rather than a separate, unrelated lag. A deal
+# closed recently enough that its delivery date hasn't arrived yet shows
+# as "Open" (still in fulfillment) instead of "Delivered".
+DELIVERY_LAG_FRACTION_RANGE = (0.7, 1.0)
+
 # ---------------------------------------------------------------------------
 # Inventory
 # ---------------------------------------------------------------------------

@@ -23,10 +23,20 @@ Design notes:
   payer" story AR_LAG_DAYS already tells elsewhere in this model). If
   that payment date hasn't arrived yet as of TODAY, the invoice is still
   outstanding — Overdue if past its due_date, Current if not.
-- Every invoice's numbers (issue/due/paid dates, amount) are fixed at
-  generation time, same as everything else in this pipeline — status and
-  days_overdue are the only two fields that depend on "today" and would
-  need to be recomputed if this were regenerated on a different date.
+- delivery_status is a SEPARATE concept from payment_status — a deal can
+  be delivered but not yet paid, or (in theory) paid before delivery
+  completes. Delivery happens at some fraction of the same close-to-
+  invoice window (config.DELIVERY_LAG_FRACTION_RANGE), since real goods
+  ship before they're billed. "Open" means still in fulfillment as of
+  TODAY, not that anything's wrong. This deliberately does NOT feed back
+  into Inventory's stock_on_hand — Tatiana's call: Inventory here means
+  on-hand stock, full stop, not stock net of in-flight commitments (the
+  level of detail a real fulfillment/ops system like SOS would track).
+- Every invoice's numbers (issue/due/paid/delivery dates, amount) are
+  fixed at generation time, same as everything else in this pipeline —
+  payment_status, delivery_status, and days_overdue are the only fields
+  that depend on "today" and would need recomputing if this were
+  regenerated on a different date.
 """
 
 import numpy as np
@@ -57,8 +67,16 @@ def generate_ar_data(sales_df=None):
 
     today = pd.Timestamp(config.TODAY)
     is_paid = paid_date <= today
-    status = np.where(is_paid, "Paid", np.where(due_date < today, "Overdue", "Current"))
-    days_overdue = np.where(status == "Overdue", (today - due_date).dt.days, 0)
+    payment_status = np.where(is_paid, "Paid", np.where(due_date < today, "Overdue", "Current"))
+    days_overdue = np.where(payment_status == "Overdue", (today - due_date).dt.days, 0)
+
+    # Delivery date: some fraction of the same close-to-invoice window,
+    # always before issue_date (goods ship, then get billed) — see the
+    # module docstring for why this is a separate concept from payment.
+    delivery_fraction = rng.uniform(*config.DELIVERY_LAG_FRACTION_RANGE, n)
+    delivery_lag_days = (invoice_lag_days * delivery_fraction).round()
+    delivery_date = pd.to_datetime(won["actual_close_date"]) + pd.to_timedelta(delivery_lag_days, unit="D")
+    delivery_status = np.where(delivery_date <= today, "Delivered", "Open")
 
     ar = pd.DataFrame({
         "invoice_id": [f"INV-{i + 1:04d}" for i in range(n)],
@@ -82,8 +100,9 @@ def generate_ar_data(sales_df=None):
         "issue_date": issue_date,
         "due_date": due_date,
         "paid_date": paid_date.where(is_paid),
-        "status": status,
+        "payment_status": payment_status,
         "days_overdue": days_overdue,
+        "delivery_status": delivery_status,
     })
     return ar.sort_values("issue_date").reset_index(drop=True)
 
@@ -93,7 +112,8 @@ if __name__ == "__main__":
     ar_df = generate_ar_data(sales_df)
     print(ar_df.head(10).to_string())
     print(f"\n{len(ar_df)} invoices generated")
-    print(ar_df.status.value_counts())
+    print(ar_df.payment_status.value_counts())
+    print(ar_df.delivery_status.value_counts())
 
     print(f"\nCheck — invoice total: ${ar_df.amount.sum():,.0f}")
     won_total = sales_df[sales_df.status == 'Won'].deal_value.sum()
@@ -101,8 +121,10 @@ if __name__ == "__main__":
     assert abs(ar_df.amount.sum() - won_total) < 1.0, "AR and Sales Closed Won totals don't match!"
     print("Match confirmed (every Won deal has exactly one invoice for its full value).")
 
-    paid = ar_df[ar_df.status == "Paid"]
+    paid = ar_df[ar_df.payment_status == "Paid"]
     dso = (paid.paid_date - paid.issue_date).dt.days.mean()
     print(f"\nDSO (all paid invoices): {dso:.0f} days")
-    overdue_amt = ar_df[ar_df.status == "Overdue"].amount.sum()
-    print(f"AR Overdue: ${overdue_amt:,.0f} across {(ar_df.status == 'Overdue').sum()} invoices")
+    overdue_amt = ar_df[ar_df.payment_status == "Overdue"].amount.sum()
+    print(f"AR Overdue: ${overdue_amt:,.0f} across {(ar_df.payment_status == 'Overdue').sum()} invoices")
+    open_fulfillment = ar_df[ar_df.delivery_status == "Open"]
+    print(f"In fulfillment: {len(open_fulfillment)} invoices, ${open_fulfillment.amount.sum():,.0f}")

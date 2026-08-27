@@ -32,6 +32,13 @@ Then three tiers, matching the brand guide's status colors:
 
 That's what lets a big open deal flip a row from green to amber/red even
 though nothing about today's stock count changed.
+
+A separate "Sales in Fulfillment" table at the bottom lists Closed Won
+deals whose delivery_status (on the AR tab) is still "Open" — not yet
+delivered. This is intentionally NOT netted against stock_on_hand above:
+Tatiana's call, this tab means on-hand stock, full stop, not stock net
+of in-flight commitments the way a real fulfillment system (e.g. SOS)
+would track it — that level of detail belongs to Ops, not this view.
 """
 
 import altair as alt
@@ -94,7 +101,7 @@ def compute_reorder_status(inventory_df, sales_df, as_of):
     return pd.DataFrame(rows)
 
 
-def render(sales_df, inventory_df, as_of):
+def render(sales_df, inventory_df, ar_df, as_of):
     inv = compute_reorder_status(inventory_df, sales_df, as_of)
 
     st.subheader("Stock & Reorder Status")
@@ -128,7 +135,11 @@ def render(sales_df, inventory_df, as_of):
     with left:
         st.markdown("**Stock on Hand vs. Reorder Point, by Product & Warehouse**")
         chart_df = inv.copy()
-        chart_df["label"] = chart_df["product"] + " — " + chart_df["warehouse"]
+        # City only ("Houston", not "Houston, TX") — the state/country
+        # suffix wasn't adding anything a reader needed to tell the two
+        # warehouses apart, just extra width on an axis that's already
+        # tight with 10 rows.
+        chart_df["label"] = chart_df["product"] + " — " + chart_df["warehouse"].str.split(",").str[0]
         bars = alt.Chart(chart_df).mark_bar(cornerRadiusTopRight=4, cornerRadiusBottomRight=4, size=18).encode(
             y=alt.Y("label:N", title=None, sort=alt.SortField("product")),
             x=alt.X("stock_on_hand:Q", title="Units"),
@@ -179,5 +190,30 @@ def render(sales_df, inventory_df, as_of):
             "pipeline_demand_units": st.column_config.NumberColumn("Weighted Pipeline Demand", format="localized"),
             "projected_stock": st.column_config.NumberColumn("Projected Stock", format="localized"),
             "reorder_status": "Status",
+        },
+    )
+
+    st.divider()
+    st.markdown("**Sales in Fulfillment**")
+    st.caption("Closed Won deals not yet delivered — delivery_status on the AR tab, separate from payment status.")
+    in_fulfillment = ar_df[ar_df.delivery_status == "Open"].sort_values("actual_close_date")
+
+    ful_col1, ful_col2 = st.columns(2)
+    ful_col1.metric("Deals in Fulfillment", f"{len(in_fulfillment):,}")
+    ful_col2.metric("Value in Fulfillment", f"${in_fulfillment.amount.sum():,.0f}")
+
+    ful_display_cols = ["invoice_id", "subsidiary", "buyer_type", "buyer_name", "product",
+                         "amount", "actual_close_date"]
+    st.dataframe(
+        in_fulfillment[ful_display_cols],
+        use_container_width=True, hide_index=True,
+        column_config={
+            "invoice_id": st.column_config.TextColumn("Invoice ID"),
+            "subsidiary": st.column_config.TextColumn("Entity"),
+            "buyer_type": st.column_config.TextColumn("Customer Category"),
+            "buyer_name": st.column_config.TextColumn("Customer"),
+            "product": st.column_config.TextColumn("Product"),
+            "amount": st.column_config.NumberColumn("Amount", format="dollar", step=1),
+            "actual_close_date": st.column_config.DateColumn("Closed On"),
         },
     )
