@@ -277,6 +277,13 @@ BLENDED_OPEX_PCT_OF_REVENUE = 0.32   # opex as % of revenue, before EBIT — act
 STARTING_CASH_BALANCE = 2_200_000    # cash balance at PRIOR_PERIOD_START
 AR_LAG_DAYS = 35                     # institutional buyers pay slowly — cash lags revenue
 
+# Blended effective rate across USA + Nigeria operations — invented, not
+# tied to either jurisdiction's actual statutory rate (US federal+state
+# blended is roughly this; Nigeria's statutory rate runs higher). This
+# model has no debt and no interest expense, so Net Income here is just
+# EBIT after this one flat tax assumption, nothing more.
+EFFECTIVE_TAX_RATE = 0.25
+
 # ---------------------------------------------------------------------------
 # Accounts Receivable / Invoicing (generate_ar.py)
 # ---------------------------------------------------------------------------

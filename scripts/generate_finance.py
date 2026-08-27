@@ -114,6 +114,9 @@ def generate_finance_data(sales_df=None):
     da_monthly = df.apply(lambda r: cost["da"][r["subsidiary"]] / 12, axis=1)
     df["da"] = da_monthly.round(2)  # exposed as its own column so EBITDA (EBIT + D&A) can be computed downstream
     df["ebit"] = (df["revenue"] - df["cogs"] - df["opex"] - da_monthly).where(happened).round(2)
+    # No debt, no interest expense in this model — Net Income is just
+    # EBIT after one flat effective tax rate (config.EFFECTIVE_TAX_RATE).
+    df["net_income"] = (df["ebit"] * (1 - config.EFFECTIVE_TAX_RATE)).round(2)
 
     # budget_revenue/budget_ebit ARE populated for every month, including
     # ones that haven't happened yet — that's the whole point. Pulled from

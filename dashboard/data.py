@@ -53,8 +53,8 @@ def load_data():
     sales["actual_close_date"] = pd.to_datetime(sales["actual_close_date"], errors="coerce")
 
     finance = data["finance"]
-    for col in ["revenue", "cogs", "opex", "da", "ebit", "budget_revenue", "budget_ebit", "budget_opex",
-                "budget_institutional_revenue", "budget_commercial_revenue",
+    for col in ["revenue", "cogs", "opex", "da", "ebit", "net_income", "budget_revenue", "budget_ebit",
+                "budget_opex", "budget_institutional_revenue", "budget_commercial_revenue",
                 "net_cash_change", "cash_balance"]:
         finance[col] = pd.to_numeric(finance[col], errors="coerce")
 

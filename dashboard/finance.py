@@ -3,13 +3,15 @@ Finance pillar, rebuilt into three sections — same three-part shape as the
 Sales tab (Sales Performance / Pipeline / Open Pipeline Detail):
 
 - Financial Performance — a 2x2 chart grid, same style as Sales
-  Performance: Recognized Revenue YTD (bullet chart vs. budget), Gross
-  Margin by Product Tier (bar chart, Sol 1-5), Recognized Revenue vs.
-  Budget by Quarter (bullet chart), and Cash Balance Trend (line, last
-  12 happened months).
-- Cash & Risk — 8 KPI tiles in two rows, same style as Sales' Pipeline
-  scorecards: Cash Balance, Runway, DSO, AR Overdue on top; Gross
-  Margin %, Customer Concentration, Opex vs. Budget, EBITDA underneath.
+  Performance (Recognized Revenue YTD, Gross Margin by Product Tier,
+  Recognized Revenue vs. Budget by Quarter, Cash Balance Trend —
+  projected through year-end), plus a row of 4 headline P&L tiles
+  underneath: Gross Margin %, EBITDA, EBIT Margin, Net Income.
+- Cash & Risk — 6 KPI tiles: Cash Balance, Runway, DSO, AR Overdue on
+  top; Customer Concentration and Opex vs. Budget underneath. (Gross
+  Margin % and EBITDA used to live here too — moved up to Financial
+  Performance, their more natural home next to the rest of the P&L,
+  rather than living in both places.)
 - AR Aging Detail — a table, same style as Sales' Open Pipeline Detail,
   listing every currently-outstanding (non-Paid) invoice.
 
@@ -195,6 +197,42 @@ def render(sales_df, finance_df, ar_df, as_of):
         ).properties(height=260)
         st.altair_chart(cash_line, use_container_width=True)
 
+    # Headline P&L tiles for the section — Gross Margin %, EBITDA, EBIT
+    # Margin, Net Income. Gross Margin % and EBITDA use to live under
+    # Cash & Risk below; moved up here (their natural home, next to the
+    # rest of the P&L) rather than living in both places.
+    #
+    # Gross Margin %: company-wide, YTD, from the same Won-deal figures
+    # the Gross Margin by Product Tier chart above already computes per
+    # tier — this is just the blended total instead of a per-tier split.
+    gm_revenue, gm_cogs = won_ytd.deal_value.sum(), won_ytd.cogs_total.sum()
+    gross_margin_pct = (gm_revenue - gm_cogs) / gm_revenue if gm_revenue else 0
+
+    # EBITDA: EBIT + D&A, both already computed upstream — da is exposed
+    # as its own column in generate_finance.py specifically so this
+    # doesn't need to re-derive the underlying assumption here.
+    ebitda_ytd = current_ytd.ebit.sum() + current_ytd.da.sum()
+
+    # EBIT Margin: EBIT as a % of the SAME booking-based revenue EBIT
+    # itself is built from (see the module docstring — everything on
+    # this tab except the two Recognized Revenue charts stays on
+    # booking-based revenue/cogs).
+    ebit_ytd = current_ytd.ebit.sum()
+    ebit_margin = ebit_ytd / current_ytd.revenue.sum() if current_ytd.revenue.sum() else 0
+
+    # Net Income: EBIT after one flat effective tax rate — this model has
+    # no debt/interest expense, so that's the only step between the two.
+    # The tax rate itself lives in config.py; net_income is computed once
+    # in generate_finance.py and just summed here, same as every other
+    # actual figure on this tab.
+    net_income_ytd = current_ytd.net_income.sum()
+
+    perf_col1, perf_col2, perf_col3, perf_col4 = st.columns(4)
+    perf_col1.metric("Gross Margin %", f"{gross_margin_pct:.1%}")
+    perf_col2.metric("EBITDA", f"${ebitda_ytd:,.0f}")
+    perf_col3.metric("EBIT Margin", f"{ebit_margin:.1%}")
+    perf_col4.metric("Net Income", f"${net_income_ytd:,.0f}")
+
     st.divider()
 
     # --- Cash & Risk ----------------------------------------------------------
@@ -227,12 +265,6 @@ def render(sales_df, finance_df, ar_df, as_of):
     col3.metric("DSO", f"{dso:,.0f} days" if dso is not None else "—")
     col4.metric("AR Overdue", f"${ar_overdue:,.0f}")
 
-    # Gross Margin %: company-wide, YTD, from the same Won-deal figures
-    # the Gross Margin by Product Tier chart above already computes per
-    # tier — this is just the blended total instead of a per-tier split.
-    gm_revenue, gm_cogs = won_ytd.deal_value.sum(), won_ytd.cogs_total.sum()
-    gross_margin_pct = (gm_revenue - gm_cogs) / gm_revenue if gm_revenue else 0
-
     # Customer Concentration: top 5 customers' share of YTD booked
     # revenue — deliberately booked (deal_value), not recognized/invoiced,
     # since "which customers make up our business" is a sales-relationship
@@ -249,18 +281,11 @@ def render(sales_df, finance_df, ar_df, as_of):
     budget_opex_ytd = current_ytd.budget_opex.sum()  # current_ytd already scoped to happened months
     opex_variance = (actual_opex_ytd - budget_opex_ytd) / budget_opex_ytd if budget_opex_ytd else 0
 
-    # EBITDA: EBIT + D&A, both already computed upstream — da is exposed
-    # as its own column in generate_finance.py specifically so this
-    # doesn't need to re-derive the underlying assumption here.
-    ebitda_ytd = current_ytd.ebit.sum() + current_ytd.da.sum()
-
-    col5, col6, col7, col8 = st.columns(4)
-    col5.metric("Gross Margin %", f"{gross_margin_pct:.1%}")
-    col6.metric("Customer Concentration", f"{top5_pct:.0%}", "top 5 customers")
-    col7.metric("Opex vs. Budget", f"{opex_variance:+.1%}",
+    col5, col6 = st.columns(2)
+    col5.metric("Customer Concentration", f"{top5_pct:.0%}", "top 5 customers")
+    col6.metric("Opex vs. Budget", f"{opex_variance:+.1%}",
                 "over budget" if opex_variance > 0 else "under budget",
                 delta_color="inverse")
-    col8.metric("EBITDA", f"${ebitda_ytd:,.0f}")
 
     st.divider()
 
