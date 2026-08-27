@@ -116,6 +116,40 @@ def inject_css():
         button[kind="segmented_controlActive"], button[kind="segmented_controlActive"] p {{
             font-weight: 700 !important;
         }}
+        /* Sales/Finance/Inventory tabs, restyled to match the entity
+           selector's pill-button look (border, rounded, filled when
+           active) instead of Streamlit's default plain text + thin
+           underline — that default was easy to miss entirely sitting
+           right below the bolder-looking entity selector. The light
+           band behind them (tab-list) gives the row its own visual
+           space instead of blending into the page. */
+        [data-testid="stTabs"] [data-baseweb="tab-list"] {{
+            background-color: #EFF1F4;
+            border-radius: 10px;
+            padding: 6px;
+            gap: 8px;
+        }}
+        [data-baseweb="tab-highlight"] {{
+            display: none;
+        }}
+        [data-testid="stTab"] {{
+            background-color: {CARD_BG};
+            border: 1px solid {BORDER};
+            border-radius: 20px !important;
+            padding: 6px 16px !important;
+            height: auto !important;
+        }}
+        [data-testid="stTab"] p {{
+            color: {NAVY} !important;
+            font-size: 13px;
+        }}
+        [data-testid="stTab"][aria-selected="true"] {{
+            background-color: {NAVY} !important;
+            border-color: {NAVY} !important;
+        }}
+        [data-testid="stTab"][aria-selected="true"] p {{
+            color: white !important;
+        }}
         .lumin-header {{
             display: flex;
             justify-content: space-between;
