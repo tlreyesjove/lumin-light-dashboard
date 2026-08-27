@@ -148,11 +148,50 @@ def render(sales_df, finance_df, ar_df, as_of):
         # worth of cash history into one chart.
         year_cash = happened_df[happened_df.year == year]
         monthly_cash = year_cash.groupby("month", as_index=False).cash_balance.sum().sort_values("month")
-        cash_line = alt.Chart(monthly_cash).mark_line(point=True, strokeWidth=2.5, color=NAVY).encode(
+        monthly_cash["series"] = "Actual"
+
+        # Projected cash for the rest of the year — same 1-month
+        # collection-lag model generate_finance.py already uses for
+        # actuals (this month's cash IN = last month's revenue; cash OUT
+        # = this month's costs), just driven by budget_revenue/
+        # budget_opex instead, since actuals don't exist yet for months
+        # that haven't happened. budget_cogs isn't its own column, but
+        # it's fully recoverable algebraically from budget_ebit =
+        # budget_revenue - budget_cogs - budget_opex - da — the same
+        # relationship actual EBIT already follows — so this needs no
+        # new data, just arithmetic on columns already on this tab.
+        # Walked per subsidiary (cash timing is a per-entity thing) then
+        # summed back together, same as the actual figures above.
+        projected_rows = []
+        for sub, group in current.sort_values("month").groupby("subsidiary"):
+            actual_g = group[group.cash_balance.notna()]
+            if actual_g.empty:
+                continue
+            running_balance = actual_g.cash_balance.iloc[-1]
+            prior_revenue = actual_g.revenue.iloc[-1]
+            # The last actual month, repeated as the projection's own
+            # starting point — makes the dashed line pick up exactly
+            # where the solid line ends, instead of a visual gap.
+            projected_rows.append({"month": actual_g.month.iloc[-1], "cash_balance": running_balance})
+            future_g = group[group.cash_balance.isna()].sort_values("month")
+            for _, row in future_g.iterrows():
+                budget_cogs = row.budget_revenue - row.budget_opex - row.da - row.budget_ebit
+                running_balance += prior_revenue - (budget_cogs + row.budget_opex)
+                projected_rows.append({"month": row.month, "cash_balance": running_balance})
+                prior_revenue = row.budget_revenue
+        projected_cash = pd.DataFrame(projected_rows).groupby("month", as_index=False).cash_balance.sum()
+        projected_cash["series"] = "Projected"
+
+        combined_cash = pd.concat([monthly_cash, projected_cash], ignore_index=True)
+        cash_tooltip = [alt.Tooltip("month:N", title="Month"), alt.Tooltip("series:N", title="Series"),
+                         alt.Tooltip("cash_balance:Q", title="Cash Balance", format="$,.0f")]
+        cash_line = alt.Chart(combined_cash).mark_line(point=True, strokeWidth=2.5).encode(
             x=alt.X("month:N", title=None),
             y=alt.Y("cash_balance:Q", title="Cash Balance ($)", axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
-            tooltip=[alt.Tooltip("month:N", title="Month"),
-                     alt.Tooltip("cash_balance:Q", title="Cash Balance", format="$,.0f")],
+            color=alt.Color("series:N", title=None, scale=alt.Scale(
+                domain=["Actual", "Projected"], range=[NAVY, AMBER])),
+            strokeDash=alt.condition(alt.datum.series == "Projected", alt.value([4, 3]), alt.value([0])),
+            tooltip=cash_tooltip,
         ).properties(height=260)
         st.altair_chart(cash_line, use_container_width=True)
 
