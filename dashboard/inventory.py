@@ -107,24 +107,12 @@ def render(sales_df, inventory_df, ar_df, as_of):
     st.subheader("Stock & Reorder Status")
     col1, col2, col3, col4 = st.columns(4)
 
-    col1.metric("Total Units on Hand", f"{inv.stock_on_hand.sum():,.0f}")
+    col1.metric("Available Stock", f"{inv.stock_on_hand.sum():,.0f}")
     critical = (inv.reorder_status == "Critical").sum()
     warning = (inv.reorder_status == "Warning").sum()
     col2.metric("Critical (reorder now)", critical)
     col3.metric("Warning (pipeline risk)", warning)
     col4.metric("Healthy", (inv.reorder_status == "Healthy").sum())
-
-    if critical or warning:
-        flagged = inv[inv.reorder_status.isin(["Critical", "Warning"])]
-        lines = []
-        for _, r in flagged.sort_values("reorder_status").iterrows():
-            reason = (
-                "already below its static reorder point"
-                if r["stock_on_hand"] < r["reorder_point"]
-                else f"open pipeline (~{r['pipeline_demand_units']:,.0f} units weighted demand) would push it below threshold"
-            )
-            lines.append(f"- **{r['product']} — {r['warehouse']}**: {reason}")
-        st.markdown("\n".join(lines))
 
     st.divider()
 
