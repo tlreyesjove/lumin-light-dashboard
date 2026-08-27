@@ -192,7 +192,7 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=
     return (goal_bars + actual_bars + goal_labels + actual_labels_inside + actual_labels_outside).properties(height=height)
 
 
-def gauge_chart(pct, actual, target, color, title, height=150):
+def gauge_chart(pct, actual, target, color, title, height=190):
     """Semicircular gauge — a "value" arc over a light grey "remainder"
     track, both stacked into a half-circle by giving theta's scale a
     [-π/2, π/2] range instead of the usual full-circle [0, 2π]. Same
@@ -234,28 +234,32 @@ def gauge_chart(pct, actual, target, color, title, height=150):
     # for the text layers via transform_filter, the same technique
     # actual_labels_inside/outside above use — doesn't trigger it.
     base = alt.Chart(df)
-    arc = base.mark_arc(innerRadius=36, outerRadius=54, cornerRadius=4).encode(
+    arc = base.mark_arc(innerRadius=64, outerRadius=95, cornerRadius=6).encode(
         theta=alt.Theta("amount:Q", stack=True, scale=alt.Scale(domain=[0, 1], range=[-math.pi / 2, math.pi / 2])),
         color=alt.Color("segment:N", scale=alt.Scale(domain=["value", "remainder"], range=[color, BORDER]), legend=None),
         order=alt.Order("order:N"),
         tooltip=tooltip,
     )
     pct_text = base.transform_filter(alt.datum.segment == "value").mark_text(
-        fontSize=16, fontWeight="bold", color=NAVY, dy=-4,
+        fontSize=26, fontWeight="bold", color=NAVY, dy=-8,
     ).encode(text="pct_label:N", tooltip=tooltip)
     title_text = base.transform_filter(alt.datum.segment == "value").mark_text(
-        fontSize=10, fontWeight="bold", color=TEXT_SECONDARY, dy=9,
+        fontSize=14, fontWeight="bold", color=TEXT_SECONDARY, dy=14,
     ).encode(text="title_label:N", tooltip=tooltip)
     # Scale endpoints, right at the two tips of the dome (the arc's left
     # tip is 0% and right tip is 100% by construction — that's what the
     # theta scale's [-π/2, π/2] range means) — dx/dy nudge them just
-    # outside the arc rather than on top of its stroke.
+    # outside the arc rather than on top of its stroke. tooltip=alt.value(None)
+    # turns the tooltip off entirely for these two — without it, hovering
+    # falls back to Altair's default raw-field dump (same issue fixed
+    # earlier on the bullet charts' labels), but these are just static
+    # scale markers, not data worth a tooltip at all.
     min_text = base.transform_filter(alt.datum.segment == "value").mark_text(
-        fontSize=9, color=TEXT_SECONDARY, dx=-58, dy=6,
-    ).encode(text="min_label:N")
+        fontSize=12, color=TEXT_SECONDARY, dx=-103, dy=10,
+    ).encode(text="min_label:N", tooltip=alt.value(None))
     max_text = base.transform_filter(alt.datum.segment == "value").mark_text(
-        fontSize=9, color=TEXT_SECONDARY, dx=58, dy=6,
-    ).encode(text="max_label:N")
+        fontSize=12, color=TEXT_SECONDARY, dx=103, dy=10,
+    ).encode(text="max_label:N", tooltip=alt.value(None))
     return (arc + pct_text + title_text + min_text + max_text).properties(height=height)
 
 
@@ -360,19 +364,22 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
         # error, empty arc/text marks with no visible error in the UI).
         # Keying on the value itself forces a clean remount whenever the
         # numbers actually change, instead of patching.
-        gauge_col1, gauge_col2 = st.columns(2)
-        with gauge_col1:
-            pct_institutional = (actual_institutional / target_institutional) if target_institutional else 0
-            st.altair_chart(
-                gauge_chart(pct_institutional, actual_institutional, target_institutional, NAVY, "Institutional"),
-                use_container_width=True, key=f"gauge_institutional_{entity}_{pct_institutional:.4f}",
-            )
-        with gauge_col2:
-            pct_commercial = (actual_commercial / target_commercial) if target_commercial else 0
-            st.altair_chart(
-                gauge_chart(pct_commercial, actual_commercial, target_commercial, AMBER, "Commercial"),
-                use_container_width=True, key=f"gauge_commercial_{entity}_{pct_commercial:.4f}",
-            )
+        #
+        # Stacked one per row (full container width, ~300px) rather than
+        # side by side — side by side only gave each gauge ~145px to work
+        # with, forcing a radius so small it looked out of place next to
+        # every other chart on this tab. Full width lets the radius match
+        # the pie chart directly above instead.
+        pct_institutional = (actual_institutional / target_institutional) if target_institutional else 0
+        st.altair_chart(
+            gauge_chart(pct_institutional, actual_institutional, target_institutional, NAVY, "Institutional"),
+            use_container_width=True, key=f"gauge_institutional_{entity}_{pct_institutional:.4f}",
+        )
+        pct_commercial = (actual_commercial / target_commercial) if target_commercial else 0
+        st.altair_chart(
+            gauge_chart(pct_commercial, actual_commercial, target_commercial, AMBER, "Commercial"),
+            use_container_width=True, key=f"gauge_commercial_{entity}_{pct_commercial:.4f}",
+        )
 
     with row2_right:
         st.markdown("**Win/Loss Rate YTD**")
