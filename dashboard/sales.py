@@ -215,6 +215,7 @@ def gauge_chart(pct, actual, target, color, title, height=150):
     # tooltip on every layer.
     df["channel"], df["actual"], df["target"], df["pct"] = title, actual, target, pct
     df["pct_label"], df["title_label"] = f"{pct:.0%}", title
+    df["min_label"], df["max_label"] = "0%", "100%"
     tooltip = [
         alt.Tooltip("channel:N", title="Channel"),
         alt.Tooltip("actual:Q", title="Actual (YTD)", format="$,.0f"),
@@ -245,7 +246,17 @@ def gauge_chart(pct, actual, target, color, title, height=150):
     title_text = base.transform_filter(alt.datum.segment == "value").mark_text(
         fontSize=10, fontWeight="bold", color=TEXT_SECONDARY, dy=9,
     ).encode(text="title_label:N", tooltip=tooltip)
-    return (arc + pct_text + title_text).properties(height=height)
+    # Scale endpoints, right at the two tips of the dome (the arc's left
+    # tip is 0% and right tip is 100% by construction — that's what the
+    # theta scale's [-π/2, π/2] range means) — dx/dy nudge them just
+    # outside the arc rather than on top of its stroke.
+    min_text = base.transform_filter(alt.datum.segment == "value").mark_text(
+        fontSize=9, color=TEXT_SECONDARY, dx=-58, dy=6,
+    ).encode(text="min_label:N")
+    max_text = base.transform_filter(alt.datum.segment == "value").mark_text(
+        fontSize=9, color=TEXT_SECONDARY, dx=58, dy=6,
+    ).encode(text="max_label:N")
+    return (arc + pct_text + title_text + min_text + max_text).properties(height=height)
 
 
 def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
@@ -324,8 +335,6 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
             (pie + pie_labels).properties(height=260, padding={"left": 55, "right": 55, "top": 10, "bottom": 10}),
             use_container_width=True,
         )
-        st.caption("Institutional: government, NGO, multilateral")
-        st.caption("Commercial: distributors, resellers")
 
         # Channel targets, gauges below the pie in the SAME bordered
         # container — that's what ties them together as one panel to
@@ -336,7 +345,6 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
         # other annual target on this tab), which in turn trace back to
         # the Assumptions tab's Channel Revenue Target Split — not
         # invented here.
-        st.caption("**vs. Channel Target (YTD)**")
         channel_target = finance_df[finance_df.month.str.startswith(str(year))][
             ["budget_institutional_revenue", "budget_commercial_revenue"]].sum()
         target_institutional = channel_target["budget_institutional_revenue"]
@@ -399,7 +407,14 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
                       alt.Tooltip("pct:Q", title="Rate", format=".1%"),
                       alt.Tooltip("count:Q", title="Deals", format=",.0f"),
                       alt.Tooltip("amount:Q", title="Value", format="$,.0f")]
-        wl_labels = alt.Chart(wl_df).mark_text(fontWeight="bold", fontSize=12, dy=alt.expr("datum.pct > 0 ? -8 : 14")).encode(
+        # fontSize=11 and TEXT_SECONDARY, matching every other on-chart
+        # label on this tab (bullet chart goals, pie percentages, forecast
+        # totals) — this one used to be fontSize=12 with no color set
+        # (defaulting to black), the only label on the whole page that
+        # didn't match the rest.
+        wl_labels = alt.Chart(wl_df).mark_text(
+            fontWeight="bold", fontSize=11, color=TEXT_SECONDARY, dy=alt.expr("datum.pct > 0 ? -8 : 14"),
+        ).encode(
             x=alt.X("label:N"), y=alt.Y("pct:Q"), text=alt.Text("pct:Q", format=".0%"), tooltip=wl_tooltip,
         )
         st.altair_chart((wl_chart + wl_labels).properties(height=260), use_container_width=True)
