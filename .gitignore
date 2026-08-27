@@ -10,11 +10,6 @@ credentials/*.json
 # Generated data files (regenerate with scripts/generate_data.py — Google Sheets is the source of truth)
 data/*.csv
 
-# Real Be Girl files — reference material only, must NEVER be committed
-# (this repo is meant to go public). Only the Lumin Light version we build
-# from this template belongs in git.
-Be Girl*.xlsx
-
 # Design reference screenshots (e.g. from Pipedrive, NetSuite) used to guide
 # chart design — personal reference material, not project deliverables, and
 # some are screenshots of real third-party products.
@@ -25,3 +20,10 @@ data/ERP Inspiration/
 
 # OS junk
 .DS_Store
+
+# Old internal-facing README draft — working notes between Tatiana and
+# Claude Code, not meant for external readers. Never publish this.
+INTERNAL_OLD_README.md
+
+# Personal working notes, not meant for the public repo — kept locally only.
+Learning Doc.md
