@@ -2,11 +2,12 @@
 Sales pillar, split into two sections per Tatiana's request:
 
 - Sales Performance — what's already happened, as 4 report panels:
-  Sales YTD (actual vs. annual goal), Sales by Quarter (actual vs. each
-  quarter's goal), Sales by Channel (Institutional vs. Commercial share,
-  as a pie — plus two semicircular gauges underneath, in the same panel,
-  showing each channel's YTD revenue against its own target), and
-  Win/Loss Rate (a diverging bar, by deal count: won / (won + lost)).
+  Booked YTD (actual vs. annual goal), Booked by Quarter (actual vs.
+  each quarter's goal), Booked by Channel (Institutional vs. Commercial
+  share, as a pie — plus two semicircular gauges underneath, in the
+  same panel, showing each channel's YTD revenue against its own
+  target), and Win/Loss Rate (a diverging bar, by deal count: won /
+  (won + lost)).
 - Pipeline — what's still open, as 4 scorecards (Revenue Forecast /
   Weighted Pipeline, Open Deals, Avg. Sales Cycle, Avg. Order Value) plus
   a Revenue Forecast by Month chart (Open by expected close date vs. Won
@@ -23,8 +24,8 @@ budget_revenue — annual and quarterly totals are both just sums of that
 same column, not a separate number. Quarterly goals in particular now
 reflect the explicit 2026 quarterly target split (10/20/30/40) set in the
 financial model, not the old flat monthly seasonality curve — see
-Learning Doc 2.5. Channel targets (the two gauges under Sales by Channel)
-work the same way, from budget_institutional_revenue/
+Learning Doc 2.5. Channel targets (the two gauges under Booked by
+Channel) work the same way, from budget_institutional_revenue/
 budget_commercial_revenue — 2026 only, since there's no channel target
 for a year that's already closed out.
 
@@ -106,7 +107,7 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=
     df["goal_label"] = df["goal"].apply(lambda v: f"{money_label(v)} \U0001F3AF")  # \U0001F3AF = 🎯
     df["actual_label"] = df["actual"].apply(money_label)
     # Two labels, positioned differently depending on which bar is taller —
-    # used by both Sales YTD and Sales by Quarter (Tatiana flagged this on
+    # used by both Booked YTD and Booked by Quarter (Tatiana flagged this on
     # the Quarter panel, but the rule is general to any goal-vs-actual bar):
     #   - Normal case (goal >= actual, the common case): goal sits OUTSIDE
     #     the bar, nudged above its own top — dy=-10 already does this
@@ -222,7 +223,7 @@ def gauge_chart(pct, actual, target, color, title, height=140):
         alt.Tooltip("pct:Q", title="% of Target", format=".0%"),
     ]
     # One shared `base`/dataset for all three layers (arc + both text
-    # labels), same as bullet_chart and the Sales by Channel pie —
+    # labels), same as bullet_chart and the Booked by Channel pie —
     # layering in separate single-row alt.Chart(...) objects for the text
     # (each its own tiny dataset) intermittently rendered as a BLANK gauge
     # after switching entities: Streamlit tries to patch an existing
@@ -265,7 +266,15 @@ def gauge_chart(pct, actual, target, color, title, height=140):
     max_text = base.transform_filter(alt.datum.segment == "value").mark_text(
         fontSize=9, color=TEXT_SECONDARY, dx=76, dy=8,
     ).encode(text="max_label:N", tooltip=alt.value(None))
-    return (arc + pct_text + title_text + min_text + max_text).properties(height=height)
+    # Arc marks auto-center within the plotting area, so with height=140
+    # and outerRadius=70 the dome's own top edge landed exactly at the
+    # very top of the view — zero headroom, clipped. Padding pushes the
+    # whole plotting area down inside a taller view instead of shrinking
+    # the arc, the same way the pie chart above already uses padding for
+    # breathing room.
+    return (arc + pct_text + title_text + min_text + max_text).properties(
+        height=height, padding={"top": 25, "bottom": 5, "left": 5, "right": 5},
+    )
 
 
 def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
@@ -286,7 +295,7 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
     row1_left, row1_right = st.columns(2)
 
     with row1_left:
-        st.markdown("**Sales YTD**")
+        st.markdown("**Booked YTD**")
         annual_goal = finance_df[finance_df.month.str.startswith(str(year))].budget_revenue.sum()
         ytd_df = pd.DataFrame([{
             "period": str(year), "goal": annual_goal, "actual": won_ytd.deal_value.sum(),
@@ -295,7 +304,7 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
         st.altair_chart(bullet_chart(ytd_df, "period", None, NAVY, 260, y_max=annual_goal + 5_000_000), use_container_width=True)
 
     with row1_right:
-        st.markdown("**Sales by Quarter**")
+        st.markdown("**Booked by Quarter**")
         q_rows = []
         for q in range(1, 5):
             q_start, q_end = quarter_bounds(year, q)
@@ -310,7 +319,7 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
     row2_left, row2_right = st.columns(2)
 
     with row2_left:
-        st.markdown("**Sales by Channel**")
+        st.markdown("**Booked by Channel**")
         by_client_type = won_ytd.groupby("client_type").deal_value.sum().reindex(list(CLIENT_TYPE_COLORS)).reset_index()
         by_client_type.columns = ["client_type", "revenue"]
         by_client_type["revenue"] = by_client_type["revenue"].fillna(0)
