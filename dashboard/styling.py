@@ -150,13 +150,38 @@ def inject_css():
         [data-testid="stTab"][aria-selected="true"] p {{
             color: white !important;
         }}
+        /* Entity selector (Lumin Group Consolidated/USA/Nigeria), given
+           the same light band treatment as the tabs below it, and a
+           slightly larger font since it's the higher-level control of
+           the two rows. */
+        [role="radiogroup"] {{
+            background-color: #EFF1F4;
+            border-radius: 10px;
+            padding: 6px;
+            gap: 8px !important;
+        }}
+        [data-testid="stBaseButton-segmented_control"] p,
+        [data-testid="stBaseButton-segmented_controlActive"] p {{
+            font-size: 16px !important;
+        }}
+        /* Streamlit's default "selected" look for segmented_control is a
+           translucent navy wash with navy text, not a solid fill — swap
+           it for the same solid-navy/white-text treatment the tabs use,
+           so both rows genuinely match. */
+        [data-testid="stBaseButton-segmented_controlActive"] {{
+            background-color: {NAVY} !important;
+            border-color: {NAVY} !important;
+        }}
+        [data-testid="stBaseButton-segmented_controlActive"] p {{
+            color: white !important;
+        }}
         .lumin-header {{
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
             border-bottom: 3px solid {AMBER};
             padding-bottom: 16px;
-            margin-bottom: 24px;
+            margin-bottom: 40px;
         }}
         .lumin-wordmark {{
             font-weight: 800;
