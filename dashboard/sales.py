@@ -1,16 +1,15 @@
 """
 Sales pillar, split into two sections per Tatiana's request:
 
-- Sales Performance — what's already happened, as 5 report panels:
-  Booked YTD (actual vs. annual goal), Booked by Quarter (actual vs.
-  each quarter's goal), Booked by Channel (Institutional vs. Commercial
-  share, as a pie — plus two semicircular gauges underneath, in the
-  same panel, showing each channel's YTD revenue against its own
-  target), Win/Loss Rate (a diverging bar, by deal count: won /
-  (won + lost)), and Booked by Product Tier (Sol 1-5 revenue mix, full
-  width below the 2x2 grid — a bar chart rather than a pie, since
-  PRODUCT_COLORS is a 5-step ordinal ramp and 5 similar-blue pie wedges
-  read far worse than 5 bars at a glance).
+- Sales Performance — what's already happened, as a 2x2 grid: Booked
+  YTD (actual vs. annual goal) and Booked by Quarter (actual vs. each
+  quarter's goal) on top; Booked by Channel (Institutional vs.
+  Commercial share, as a pie, with Product Mix — Sol 1-5 revenue, a bar
+  chart since PRODUCT_COLORS is a 5-step ordinal ramp and 5 similar-blue
+  pie wedges read far worse than 5 bars — underneath in the same
+  column) and Win/Loss Rate (a diverging bar, by deal count: won /
+  (won + lost), with the two channel-target gauges underneath in that
+  column instead) on the bottom.
 - Pipeline — what's still open, as 4 scorecards (Revenue Forecast /
   Weighted Pipeline, Open Deals, Avg. Sales Cycle, Avg. Order Value) plus
   a Revenue Forecast by Month chart (Open by expected close date vs. Won
@@ -27,8 +26,8 @@ budget_revenue — annual and quarterly totals are both just sums of that
 same column, not a separate number. Quarterly goals in particular now
 reflect the explicit 2026 quarterly target split (10/20/30/40) set in the
 financial model, not the old flat monthly seasonality curve — see
-Learning Doc 2.5. Channel targets (the two gauges under Booked by
-Channel) work the same way, from budget_institutional_revenue/
+Learning Doc 2.5. Channel targets (the two gauges under Win/Loss Rate)
+work the same way, from budget_institutional_revenue/
 budget_commercial_revenue — 2026 only, since there's no channel target
 for a year that's already closed out.
 
@@ -357,48 +356,37 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
             use_container_width=True,
         )
 
-        # Channel targets, gauges below the pie in the SAME "Sales by
-        # Channel" panel (no divider or border between them — a bordered
-        # container was tried and dropped, it was the only panel on the
-        # tab with an outline and looked out of place) — the shared
-        # header and immediate proximity are what tie them together as
-        # one panel to read. Targets come from the Finance tab's
-        # budget_institutional_revenue/budget_commercial_revenue (summed
-        # over the year, same "sum the monthly column" pattern as every
-        # other annual target on this tab), which in turn trace back to
-        # the Assumptions tab's Channel Revenue Target Split — not
-        # invented here.
-        channel_target = finance_df[finance_df.month.str.startswith(str(year))][
-            ["budget_institutional_revenue", "budget_commercial_revenue"]].sum()
-        target_institutional = channel_target["budget_institutional_revenue"]
-        target_commercial = channel_target["budget_commercial_revenue"]
-        actual_by_channel = by_client_type.set_index("client_type").revenue
-        actual_institutional = actual_by_channel.get("Institutional", 0)
-        actual_commercial = actual_by_channel.get("Commercial", 0)
+        # Product Mix sits below the pie, in the SAME column — narrower
+        # than its original full-width version (by request), which is
+        # what makes room for it to live here instead. Booked by Channel
+        # itself stays put; this just fills the space directly below it.
+        st.markdown("**Product Mix**")
+        by_product = won_ytd.groupby("product").deal_value.sum().reindex(list(PRODUCT_COLORS)).reset_index()
+        by_product.columns = ["product", "revenue"]
+        by_product["revenue"] = by_product["revenue"].fillna(0)
+        product_total = by_product.revenue.sum()
+        by_product["pct"] = by_product.revenue / product_total if product_total else 0
+        by_product["label"] = by_product.apply(lambda r: f"{money_label(r.revenue)} ({r.pct:.0%})", axis=1)
 
-        # key= includes the rounded value, not just the entity — Streamlit
-        # otherwise sometimes tries to patch an existing gauge's Vega view
-        # in place across a rerun rather than fully remounting it, and that
-        # patch can fail silently (an "Unrecognized data set" console
-        # error, empty arc/text marks with no visible error in the UI).
-        # Keying on the value itself forces a clean remount whenever the
-        # numbers actually change, instead of patching.
-        #
-        # Stacked one per row (full container width, ~300px) rather than
-        # side by side — side by side only gave each gauge ~145px to work
-        # with, forcing a radius so small it looked out of place next to
-        # every other chart on this tab. Full width lets the radius match
-        # the pie chart directly above instead.
-        pct_institutional = (actual_institutional / target_institutional) if target_institutional else 0
-        st.altair_chart(
-            gauge_chart(pct_institutional, actual_institutional, target_institutional, NAVY, "Institutional"),
-            use_container_width=True, key=f"gauge_institutional_{entity}_{pct_institutional:.4f}",
+        product_base = alt.Chart(by_product)
+        product_tooltip = [alt.Tooltip("product:N", title="Product"),
+                            alt.Tooltip("revenue:Q", title="Revenue", format="$,.0f"),
+                            alt.Tooltip("pct:Q", title="Share", format=".0%")]
+        product_bars = product_base.mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4, size=32).encode(
+            x=alt.X("product:N", title=None, sort=list(PRODUCT_COLORS), axis=alt.Axis(labelAngle=0)),
+            y=alt.Y("revenue:Q", title="Revenue ($)", axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
+            color=alt.Color("product:N", scale=alt.Scale(
+                domain=list(PRODUCT_COLORS), range=list(PRODUCT_COLORS.values())), legend=None),
+            tooltip=product_tooltip,
         )
-        pct_commercial = (actual_commercial / target_commercial) if target_commercial else 0
-        st.altair_chart(
-            gauge_chart(pct_commercial, actual_commercial, target_commercial, AMBER, "Commercial"),
-            use_container_width=True, key=f"gauge_commercial_{entity}_{pct_commercial:.4f}",
+        # Same "label above the bar" treatment as every other bar chart on
+        # this tab (dy=-10, fontSize=11, TEXT_SECONDARY, shared tooltip so
+        # hovering the label itself doesn't fall back to Altair's raw dump).
+        product_labels = product_base.mark_text(dy=-10, fontWeight="bold", fontSize=11, color=TEXT_SECONDARY).encode(
+            x=alt.X("product:N", sort=list(PRODUCT_COLORS)), y=alt.Y("revenue:Q"), text=alt.Text("label:N"),
+            tooltip=product_tooltip,
         )
+        st.altair_chart((product_bars + product_labels).properties(height=260), use_container_width=True)
 
     with row2_right:
         st.markdown("**Win/Loss Rate YTD**")
@@ -445,36 +433,39 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
         )
         st.altair_chart((wl_chart + wl_labels).properties(height=260), use_container_width=True)
 
-    # Full width, its own row — Sol 1-5 is a 5-way ordinal split, and a
-    # 6th column here would break the clean 2x2 grid above for no
-    # partner chart that actually belongs next to it.
-    st.markdown("**Booked by Product Tier**")
-    by_product = won_ytd.groupby("product").deal_value.sum().reindex(list(PRODUCT_COLORS)).reset_index()
-    by_product.columns = ["product", "revenue"]
-    by_product["revenue"] = by_product["revenue"].fillna(0)
-    product_total = by_product.revenue.sum()
-    by_product["pct"] = by_product.revenue / product_total if product_total else 0
-    by_product["label"] = by_product.apply(lambda r: f"{money_label(r.revenue)} ({r.pct:.0%})", axis=1)
+        # Channel target gauges moved here, below Win/Loss Rate — Product
+        # Mix took their old spot under Booked by Channel, so this is
+        # where they landed instead. Targets come from the Finance tab's
+        # budget_institutional_revenue/budget_commercial_revenue (summed
+        # over the year, same "sum the monthly column" pattern as every
+        # other annual target on this tab), which in turn trace back to
+        # the Assumptions tab's Channel Revenue Target Split — not
+        # invented here.
+        channel_target = finance_df[finance_df.month.str.startswith(str(year))][
+            ["budget_institutional_revenue", "budget_commercial_revenue"]].sum()
+        target_institutional = channel_target["budget_institutional_revenue"]
+        target_commercial = channel_target["budget_commercial_revenue"]
+        actual_by_channel = by_client_type.set_index("client_type").revenue
+        actual_institutional = actual_by_channel.get("Institutional", 0)
+        actual_commercial = actual_by_channel.get("Commercial", 0)
 
-    product_base = alt.Chart(by_product)
-    product_tooltip = [alt.Tooltip("product:N", title="Product"),
-                        alt.Tooltip("revenue:Q", title="Revenue", format="$,.0f"),
-                        alt.Tooltip("pct:Q", title="Share", format=".0%")]
-    product_bars = product_base.mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4, size=48).encode(
-        x=alt.X("product:N", title=None, sort=list(PRODUCT_COLORS), axis=alt.Axis(labelAngle=0)),
-        y=alt.Y("revenue:Q", title="Revenue ($)", axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
-        color=alt.Color("product:N", scale=alt.Scale(
-            domain=list(PRODUCT_COLORS), range=list(PRODUCT_COLORS.values())), legend=None),
-        tooltip=product_tooltip,
-    )
-    # Same "label above the bar" treatment as every other bar chart on
-    # this tab (dy=-10, fontSize=11, TEXT_SECONDARY, shared tooltip so
-    # hovering the label itself doesn't fall back to Altair's raw dump).
-    product_labels = product_base.mark_text(dy=-10, fontWeight="bold", fontSize=11, color=TEXT_SECONDARY).encode(
-        x=alt.X("product:N", sort=list(PRODUCT_COLORS)), y=alt.Y("revenue:Q"), text=alt.Text("label:N"),
-        tooltip=product_tooltip,
-    )
-    st.altair_chart((product_bars + product_labels).properties(height=260), use_container_width=True)
+        # key= includes the rounded value, not just the entity — Streamlit
+        # otherwise sometimes tries to patch an existing gauge's Vega view
+        # in place across a rerun rather than fully remounting it, and that
+        # patch can fail silently (an "Unrecognized data set" console
+        # error, empty arc/text marks with no visible error in the UI).
+        # Keying on the value itself forces a clean remount whenever the
+        # numbers actually change, instead of patching.
+        pct_institutional = (actual_institutional / target_institutional) if target_institutional else 0
+        st.altair_chart(
+            gauge_chart(pct_institutional, actual_institutional, target_institutional, NAVY, "Institutional"),
+            use_container_width=True, key=f"gauge_institutional_{entity}_{pct_institutional:.4f}",
+        )
+        pct_commercial = (actual_commercial / target_commercial) if target_commercial else 0
+        st.altair_chart(
+            gauge_chart(pct_commercial, actual_commercial, target_commercial, AMBER, "Commercial"),
+            use_container_width=True, key=f"gauge_commercial_{entity}_{pct_commercial:.4f}",
+        )
 
     st.divider()
 
