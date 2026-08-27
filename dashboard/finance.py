@@ -89,7 +89,8 @@ def render(sales_df, finance_df, ar_df, as_of):
             "period": str(year), "goal": annual_goal, "actual": recognized_ytd,
             "pct_of_goal": (recognized_ytd / annual_goal) if annual_goal else 0,
         }])
-        st.altair_chart(bullet_chart(rev_df, "period", None, NAVY, 260, y_max=annual_goal + 5_000_000),
+        st.altair_chart(bullet_chart(rev_df, "period", None, NAVY, 260, y_max=annual_goal + 5_000_000,
+                                      y_title="Revenue ($)"),
                          use_container_width=True)
 
     with row1_right:
@@ -135,17 +136,19 @@ def render(sales_df, finance_df, ar_df, as_of):
             q_rows.append({"quarter": f"Q{q} {year}", "goal": q_goal, "actual": q_actual,
                             "pct_of_goal": (q_actual / q_goal) if q_goal else 0})
         q_df = pd.DataFrame(q_rows)
-        st.altair_chart(bullet_chart(q_df, "quarter", None, NAVY, 260, x_sort=q_df.quarter.tolist()),
+        st.altair_chart(bullet_chart(q_df, "quarter", None, NAVY, 260, x_sort=q_df.quarter.tolist(),
+                                      y_title="Revenue ($)"),
                          use_container_width=True)
 
     with row2_right:
         st.markdown("**Cash Balance Trend**")
-        # Trailing 12 happened months, not the whole history — a "trend"
-        # chart should show recent direction, not the entire multi-year
-        # cash history compressed into unreadable ticks.
-        monthly_cash = happened_df.groupby("month", as_index=False).cash_balance.sum().sort_values("month")
-        trailing_cash = monthly_cash.tail(12)
-        cash_line = alt.Chart(trailing_cash).mark_line(point=True, strokeWidth=2.5, color=NAVY).encode(
+        # The current calendar year only (Jan through whichever month has
+        # most recently happened) — not a rolling trailing-12 window,
+        # which would cross into the prior fiscal year and mix two years'
+        # worth of cash history into one chart.
+        year_cash = happened_df[happened_df.year == year]
+        monthly_cash = year_cash.groupby("month", as_index=False).cash_balance.sum().sort_values("month")
+        cash_line = alt.Chart(monthly_cash).mark_line(point=True, strokeWidth=2.5, color=NAVY).encode(
             x=alt.X("month:N", title=None),
             y=alt.Y("cash_balance:Q", title="Cash Balance ($)", axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
             tooltip=[alt.Tooltip("month:N", title="Month"),

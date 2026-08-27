@@ -87,7 +87,7 @@ MONEY_AXIS_EXPR = (
 )
 
 
-def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=None):
+def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=None, y_title="Sales ($)"):
     """Shared "actual vs. goal" bar: a light gray bar sized to the goal,
     with a colored bar for the actual value drawn on top of it — same
     idea as Tatiana's reference screenshots (a target bracket behind a
@@ -154,7 +154,7 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=
     base = alt.Chart(df)
     goal_bars = base.mark_bar(size=52, cornerRadiusTopLeft=4, cornerRadiusTopRight=4, color=GOAL_COLOR).encode(
         x=alt.X(f"{x_field}:N", title=x_title, sort=x_sort, axis=alt.Axis(labelAngle=0)),
-        y=alt.Y("goal:Q", title="Sales ($)", scale=y_scale, axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
+        y=alt.Y("goal:Q", title=y_title, scale=y_scale, axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
         tooltip=tooltip,
     )
     actual_bars = base.mark_bar(size=52, cornerRadiusTopLeft=4, cornerRadiusTopRight=4, color=actual_color).encode(
@@ -374,7 +374,7 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
                             alt.Tooltip("pct:Q", title="Share", format=".0%")]
         product_bars = product_base.mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4, size=32).encode(
             x=alt.X("product:N", title=None, sort=list(PRODUCT_COLORS), axis=alt.Axis(labelAngle=0)),
-            y=alt.Y("revenue:Q", title="Revenue ($)", axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
+            y=alt.Y("revenue:Q", title="Sales ($)", axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
             color=alt.Color("product:N", scale=alt.Scale(
                 domain=list(PRODUCT_COLORS), range=list(PRODUCT_COLORS.values())), legend=None),
             tooltip=product_tooltip,
