@@ -2,16 +2,17 @@
 Finance pillar, rebuilt into three sections — same three-part shape as the
 Sales tab (Sales Performance / Pipeline / Open Pipeline Detail):
 
-- Financial Performance — a 2x2 chart grid, same style as Sales
-  Performance (Recognized Revenue YTD, Gross Margin by Product Tier,
-  Recognized Revenue vs. Budget by Quarter, Cash Balance Trend —
-  projected through year-end), plus a row of 4 headline P&L tiles
+- Financial Performance — 3 charts (Recognized Revenue YTD and Gross
+  Margin by Product Tier side by side, Recognized Revenue vs. Budget by
+  Quarter full width below), plus a row of 4 headline P&L tiles
   underneath: Gross Margin %, EBITDA, EBIT Margin, Net Income.
-- Cash & Risk — 6 KPI tiles: Cash Balance, Runway, DSO, AR Overdue on
-  top; Customer Concentration and Opex vs. Budget underneath. (Gross
-  Margin % and EBITDA used to live here too — moved up to Financial
-  Performance, their more natural home next to the rest of the P&L,
-  rather than living in both places.)
+- Cash & Risk — 6 KPI tiles (Cash Balance, Runway, DSO, AR Overdue on
+  top; Customer Concentration and Opex vs. Budget underneath) plus the
+  Cash Balance Trend chart (projected through year-end) — grouped here
+  with the rest of the cash story rather than living in the chart grid
+  above. (Gross Margin % and EBITDA used to live in this section too —
+  moved up to Financial Performance, their more natural home next to
+  the rest of the P&L, rather than living in both places.)
 - AR Aging Detail — a table, same style as Sales' Open Pipeline Detail,
   listing every currently-outstanding (non-Paid) invoice.
 
@@ -121,81 +122,27 @@ def render(sales_df, finance_df, ar_df, as_of):
         )
         st.altair_chart((margin_bars + margin_labels).properties(height=260), use_container_width=True)
 
-    row2_left, row2_right = st.columns(2)
-
-    with row2_left:
-        st.markdown("**Recognized Revenue vs. Budget, by Quarter**")
-        q_rows = []
-        for q in range(1, 5):
-            q_start, q_end = quarter_bounds(year, q)
-            q_months = [f"{year}-{m:02d}" for m in range((q - 1) * 3 + 1, q * 3 + 1)]
-            q_goal = finance_df[finance_df.month.isin(q_months)].budget_revenue.sum()
-            # Same cohort-plus-already-invoiced logic as Recognized Revenue
-            # YTD above: which quarter the deal CLOSED in, filtered down to
-            # the portion already invoiced by as_of.
-            q_actual = ar_df[(ar_df.actual_close_date >= q_start) & (ar_df.actual_close_date <= q_end)
-                              & (ar_df.issue_date <= as_of)].amount.sum()
-            q_rows.append({"quarter": f"Q{q} {year}", "goal": q_goal, "actual": q_actual,
-                            "pct_of_goal": (q_actual / q_goal) if q_goal else 0})
-        q_df = pd.DataFrame(q_rows)
-        st.altair_chart(bullet_chart(q_df, "quarter", None, NAVY, 260, x_sort=q_df.quarter.tolist(),
-                                      y_title="Revenue ($)"),
-                         use_container_width=True)
-
-    with row2_right:
-        st.markdown("**Cash Balance Trend**")
-        # The current calendar year only (Jan through whichever month has
-        # most recently happened) — not a rolling trailing-12 window,
-        # which would cross into the prior fiscal year and mix two years'
-        # worth of cash history into one chart.
-        year_cash = happened_df[happened_df.year == year]
-        monthly_cash = year_cash.groupby("month", as_index=False).cash_balance.sum().sort_values("month")
-        monthly_cash["series"] = "Actual"
-
-        # Projected cash for the rest of the year — same 1-month
-        # collection-lag model generate_finance.py already uses for
-        # actuals (this month's cash IN = last month's revenue; cash OUT
-        # = this month's costs), just driven by budget_revenue/
-        # budget_opex instead, since actuals don't exist yet for months
-        # that haven't happened. budget_cogs isn't its own column, but
-        # it's fully recoverable algebraically from budget_ebit =
-        # budget_revenue - budget_cogs - budget_opex - da — the same
-        # relationship actual EBIT already follows — so this needs no
-        # new data, just arithmetic on columns already on this tab.
-        # Walked per subsidiary (cash timing is a per-entity thing) then
-        # summed back together, same as the actual figures above.
-        projected_rows = []
-        for sub, group in current.sort_values("month").groupby("subsidiary"):
-            actual_g = group[group.cash_balance.notna()]
-            if actual_g.empty:
-                continue
-            running_balance = actual_g.cash_balance.iloc[-1]
-            prior_revenue = actual_g.revenue.iloc[-1]
-            # The last actual month, repeated as the projection's own
-            # starting point — makes the dashed line pick up exactly
-            # where the solid line ends, instead of a visual gap.
-            projected_rows.append({"month": actual_g.month.iloc[-1], "cash_balance": running_balance})
-            future_g = group[group.cash_balance.isna()].sort_values("month")
-            for _, row in future_g.iterrows():
-                budget_cogs = row.budget_revenue - row.budget_opex - row.da - row.budget_ebit
-                running_balance += prior_revenue - (budget_cogs + row.budget_opex)
-                projected_rows.append({"month": row.month, "cash_balance": running_balance})
-                prior_revenue = row.budget_revenue
-        projected_cash = pd.DataFrame(projected_rows).groupby("month", as_index=False).cash_balance.sum()
-        projected_cash["series"] = "Projected"
-
-        combined_cash = pd.concat([monthly_cash, projected_cash], ignore_index=True)
-        cash_tooltip = [alt.Tooltip("month:N", title="Month"), alt.Tooltip("series:N", title="Series"),
-                         alt.Tooltip("cash_balance:Q", title="Cash Balance", format="$,.0f")]
-        cash_line = alt.Chart(combined_cash).mark_line(point=True, strokeWidth=2.5).encode(
-            x=alt.X("month:N", title=None),
-            y=alt.Y("cash_balance:Q", title="Cash Balance ($)", axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
-            color=alt.Color("series:N", title=None, scale=alt.Scale(
-                domain=["Actual", "Projected"], range=[NAVY, AMBER])),
-            strokeDash=alt.condition(alt.datum.series == "Projected", alt.value([4, 3]), alt.value([0])),
-            tooltip=cash_tooltip,
-        ).properties(height=260)
-        st.altair_chart(cash_line, use_container_width=True)
+    # Recognized Revenue vs. Budget by Quarter, full width, alone — it lost
+    # its row partner when Cash Balance Trend moved down to Cash & Risk
+    # (grouped with the rest of the cash story instead of living in this
+    # chart grid).
+    st.markdown("**Recognized Revenue vs. Budget, by Quarter**")
+    q_rows = []
+    for q in range(1, 5):
+        q_start, q_end = quarter_bounds(year, q)
+        q_months = [f"{year}-{m:02d}" for m in range((q - 1) * 3 + 1, q * 3 + 1)]
+        q_goal = finance_df[finance_df.month.isin(q_months)].budget_revenue.sum()
+        # Same cohort-plus-already-invoiced logic as Recognized Revenue
+        # YTD above: which quarter the deal CLOSED in, filtered down to
+        # the portion already invoiced by as_of.
+        q_actual = ar_df[(ar_df.actual_close_date >= q_start) & (ar_df.actual_close_date <= q_end)
+                          & (ar_df.issue_date <= as_of)].amount.sum()
+        q_rows.append({"quarter": f"Q{q} {year}", "goal": q_goal, "actual": q_actual,
+                        "pct_of_goal": (q_actual / q_goal) if q_goal else 0})
+    q_df = pd.DataFrame(q_rows)
+    st.altair_chart(bullet_chart(q_df, "quarter", None, NAVY, 260, x_sort=q_df.quarter.tolist(),
+                                  y_title="Revenue ($)"),
+                     use_container_width=True)
 
     # Headline P&L tiles for the section — Gross Margin %, EBITDA, EBIT
     # Margin, Net Income. Gross Margin % and EBITDA use to live under
@@ -257,11 +204,20 @@ def render(sales_df, finance_df, ar_df, as_of):
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Cash Balance", f"${latest_cash:,.0f}", f"as of {latest_month}")
-    if avg_monthly_change < 0:
+    # Cash Runway = Current Cash Balance / Monthly Net Burn Rate, always
+    # expressed in months — this used to only show a number when the
+    # trailing-3-month average was actually negative (burning cash),
+    # showing "N/A" otherwise. But "average cash change" being positive
+    # just means the business is currently cash-generative, not that
+    # runway is undefined — the formula still divides cleanly either
+    # way, so it always gets a real number now, with the caption saying
+    # which direction it's going.
+    if avg_monthly_change:
         runway_months = latest_cash / abs(avg_monthly_change)
-        col2.metric("Runway", f"{runway_months:,.1f} months", "at current burn", delta_color="off")
+        caption = "at current burn" if avg_monthly_change < 0 else "at current pace (cash flow positive)"
+        col2.metric("Runway", f"{runway_months:,.1f} months", caption, delta_color="off")
     else:
-        col2.metric("Runway", "N/A", "cash flow positive")
+        col2.metric("Runway", "N/A", "no recent cash movement")
     col3.metric("DSO", f"{dso:,.0f} days" if dso is not None else "—")
     col4.metric("AR Overdue", f"${ar_overdue:,.0f}")
 
@@ -286,6 +242,60 @@ def render(sales_df, finance_df, ar_df, as_of):
     col6.metric("Opex vs. Budget", f"{opex_variance:+.1%}",
                 "over budget" if opex_variance > 0 else "under budget",
                 delta_color="inverse")
+
+    st.markdown("**Cash Balance Trend**")
+    # The current calendar year only (Jan through whichever month has
+    # most recently happened) — not a rolling trailing-12 window, which
+    # would cross into the prior fiscal year and mix two years' worth of
+    # cash history into one chart.
+    year_cash = happened_df[happened_df.year == year]
+    monthly_cash = year_cash.groupby("month", as_index=False).cash_balance.sum().sort_values("month")
+    monthly_cash["series"] = "Actual"
+
+    # Projected cash for the rest of the year — same 1-month
+    # collection-lag model generate_finance.py already uses for actuals
+    # (this month's cash IN = last month's revenue; cash OUT = this
+    # month's costs), just driven by budget_revenue/budget_opex instead,
+    # since actuals don't exist yet for months that haven't happened.
+    # budget_cogs isn't its own column, but it's fully recoverable
+    # algebraically from budget_ebit = budget_revenue - budget_cogs -
+    # budget_opex - da — the same relationship actual EBIT already
+    # follows — so this needs no new data, just arithmetic on columns
+    # already on this tab. Walked per subsidiary (cash timing is a
+    # per-entity thing) then summed back together, same as the actual
+    # figures above.
+    projected_rows = []
+    for sub, group in current.sort_values("month").groupby("subsidiary"):
+        actual_g = group[group.cash_balance.notna()]
+        if actual_g.empty:
+            continue
+        running_balance = actual_g.cash_balance.iloc[-1]
+        prior_revenue = actual_g.revenue.iloc[-1]
+        # The last actual month, repeated as the projection's own
+        # starting point — makes the dashed line pick up exactly where
+        # the solid line ends, instead of a visual gap.
+        projected_rows.append({"month": actual_g.month.iloc[-1], "cash_balance": running_balance})
+        future_g = group[group.cash_balance.isna()].sort_values("month")
+        for _, row in future_g.iterrows():
+            budget_cogs = row.budget_revenue - row.budget_opex - row.da - row.budget_ebit
+            running_balance += prior_revenue - (budget_cogs + row.budget_opex)
+            projected_rows.append({"month": row.month, "cash_balance": running_balance})
+            prior_revenue = row.budget_revenue
+    projected_cash = pd.DataFrame(projected_rows).groupby("month", as_index=False).cash_balance.sum()
+    projected_cash["series"] = "Projected"
+
+    combined_cash = pd.concat([monthly_cash, projected_cash], ignore_index=True)
+    cash_tooltip = [alt.Tooltip("month:N", title="Month"), alt.Tooltip("series:N", title="Series"),
+                     alt.Tooltip("cash_balance:Q", title="Cash Balance", format="$,.0f")]
+    cash_line = alt.Chart(combined_cash).mark_line(point=True, strokeWidth=2.5).encode(
+        x=alt.X("month:N", title=None),
+        y=alt.Y("cash_balance:Q", title="Cash Balance ($)", axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
+        color=alt.Color("series:N", title=None, scale=alt.Scale(
+            domain=["Actual", "Projected"], range=[NAVY, AMBER])),
+        strokeDash=alt.condition(alt.datum.series == "Projected", alt.value([4, 3]), alt.value([0])),
+        tooltip=cash_tooltip,
+    ).properties(height=260)
+    st.altair_chart(cash_line, use_container_width=True)
 
     st.divider()
 
