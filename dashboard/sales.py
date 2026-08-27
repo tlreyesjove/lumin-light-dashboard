@@ -1,13 +1,16 @@
 """
 Sales pillar, split into two sections per Tatiana's request:
 
-- Sales Performance — what's already happened, as 4 report panels:
+- Sales Performance — what's already happened, as 5 report panels:
   Booked YTD (actual vs. annual goal), Booked by Quarter (actual vs.
   each quarter's goal), Booked by Channel (Institutional vs. Commercial
   share, as a pie — plus two semicircular gauges underneath, in the
   same panel, showing each channel's YTD revenue against its own
-  target), and Win/Loss Rate (a diverging bar, by deal count: won /
-  (won + lost)).
+  target), Win/Loss Rate (a diverging bar, by deal count: won /
+  (won + lost)), and Booked by Product Tier (Sol 1-5 revenue mix, full
+  width below the 2x2 grid — a bar chart rather than a pie, since
+  PRODUCT_COLORS is a 5-step ordinal ramp and 5 similar-blue pie wedges
+  read far worse than 5 bars at a glance).
 - Pipeline — what's still open, as 4 scorecards (Revenue Forecast /
   Weighted Pipeline, Open Deals, Avg. Sales Cycle, Avg. Order Value) plus
   a Revenue Forecast by Month chart (Open by expected close date vs. Won
@@ -441,6 +444,37 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
             x=alt.X("label:N"), y=alt.Y("pct:Q"), text=alt.Text("pct:Q", format=".0%"), tooltip=wl_tooltip,
         )
         st.altair_chart((wl_chart + wl_labels).properties(height=260), use_container_width=True)
+
+    # Full width, its own row — Sol 1-5 is a 5-way ordinal split, and a
+    # 6th column here would break the clean 2x2 grid above for no
+    # partner chart that actually belongs next to it.
+    st.markdown("**Booked by Product Tier**")
+    by_product = won_ytd.groupby("product").deal_value.sum().reindex(list(PRODUCT_COLORS)).reset_index()
+    by_product.columns = ["product", "revenue"]
+    by_product["revenue"] = by_product["revenue"].fillna(0)
+    product_total = by_product.revenue.sum()
+    by_product["pct"] = by_product.revenue / product_total if product_total else 0
+    by_product["label"] = by_product.apply(lambda r: f"{money_label(r.revenue)} ({r.pct:.0%})", axis=1)
+
+    product_base = alt.Chart(by_product)
+    product_tooltip = [alt.Tooltip("product:N", title="Product"),
+                        alt.Tooltip("revenue:Q", title="Revenue", format="$,.0f"),
+                        alt.Tooltip("pct:Q", title="Share", format=".0%")]
+    product_bars = product_base.mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4, size=48).encode(
+        x=alt.X("product:N", title=None, sort=list(PRODUCT_COLORS), axis=alt.Axis(labelAngle=0)),
+        y=alt.Y("revenue:Q", title="Revenue ($)", axis=alt.Axis(labelExpr=MONEY_AXIS_EXPR)),
+        color=alt.Color("product:N", scale=alt.Scale(
+            domain=list(PRODUCT_COLORS), range=list(PRODUCT_COLORS.values())), legend=None),
+        tooltip=product_tooltip,
+    )
+    # Same "label above the bar" treatment as every other bar chart on
+    # this tab (dy=-10, fontSize=11, TEXT_SECONDARY, shared tooltip so
+    # hovering the label itself doesn't fall back to Altair's raw dump).
+    product_labels = product_base.mark_text(dy=-10, fontWeight="bold", fontSize=11, color=TEXT_SECONDARY).encode(
+        x=alt.X("product:N", sort=list(PRODUCT_COLORS)), y=alt.Y("revenue:Q"), text=alt.Text("label:N"),
+        tooltip=product_tooltip,
+    )
+    st.altair_chart((product_bars + product_labels).properties(height=260), use_container_width=True)
 
     st.divider()
 
