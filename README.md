@@ -61,6 +61,9 @@ Connecting to your own Google Sheet (instead of the one this project ships
 against) requires a Google Cloud service account — see
 [SETUP.md](SETUP.md) for the full walkthrough.
 
+For more on the fictional company, product line, and data/architecture
+decisions behind this project, see [PROJECT_SPEC.md](PROJECT_SPEC.md).
+
 ## About this project
 
 Built by [Tatiana Reyes Jové](mailto:tl.reyes.jove@gmail.com) as a hands-on
