@@ -4,10 +4,9 @@ Sales pillar, split into two sections per Tatiana's request:
 - Sales Performance — what's already happened, as 4 report panels:
   Sales YTD (actual vs. annual goal), Sales by Quarter (actual vs. each
   quarter's goal), Sales by Channel (Institutional vs. Commercial share,
-  as a pie — plus two semicircular gauges underneath, in the same
-  bordered container, showing each channel's YTD revenue against its own
-  target), and Win/Loss Rate (a diverging bar, by deal count: won /
-  (won + lost)).
+  as a pie — plus two semicircular gauges underneath, in the same panel,
+  showing each channel's YTD revenue against its own target), and
+  Win/Loss Rate (a diverging bar, by deal count: won / (won + lost)).
 - Pipeline — what's still open, as 4 scorecards (Revenue Forecast /
   Weighted Pipeline, Open Deals, Avg. Sales Cycle, Avg. Order Value) plus
   a Revenue Forecast by Month chart (Open by expected close date vs. Won
@@ -192,7 +191,7 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=
     return (goal_bars + actual_bars + goal_labels + actual_labels_inside + actual_labels_outside).properties(height=height)
 
 
-def gauge_chart(pct, actual, target, color, title, height=190):
+def gauge_chart(pct, actual, target, color, title, height=140):
     """Semicircular gauge — a "value" arc over a light grey "remainder"
     track, both stacked into a half-circle by giving theta's scale a
     [-π/2, π/2] range instead of the usual full-circle [0, 2π]. Same
@@ -234,17 +233,23 @@ def gauge_chart(pct, actual, target, color, title, height=190):
     # for the text layers via transform_filter, the same technique
     # actual_labels_inside/outside above use — doesn't trigger it.
     base = alt.Chart(df)
-    arc = base.mark_arc(innerRadius=64, outerRadius=95, cornerRadius=6).encode(
+    # Radius sized to match the pie chart's outerRadius=65 right above it
+    # (not the earlier 95 — that made the gauge visually heavier than the
+    # chart it's supposed to pair with), and every text size below matches
+    # the fontSize=11 used everywhere else on this tab (bullet chart
+    # labels, pie percentages) — this widget shouldn't have its own,
+    # bigger type scale just because it's a different mark type.
+    arc = base.mark_arc(innerRadius=47, outerRadius=70, cornerRadius=5).encode(
         theta=alt.Theta("amount:Q", stack=True, scale=alt.Scale(domain=[0, 1], range=[-math.pi / 2, math.pi / 2])),
         color=alt.Color("segment:N", scale=alt.Scale(domain=["value", "remainder"], range=[color, BORDER]), legend=None),
         order=alt.Order("order:N"),
         tooltip=tooltip,
     )
     pct_text = base.transform_filter(alt.datum.segment == "value").mark_text(
-        fontSize=26, fontWeight="bold", color=NAVY, dy=-8,
+        fontSize=11, fontWeight="bold", color=NAVY, dy=-6,
     ).encode(text="pct_label:N", tooltip=tooltip)
     title_text = base.transform_filter(alt.datum.segment == "value").mark_text(
-        fontSize=14, fontWeight="bold", color=TEXT_SECONDARY, dy=14,
+        fontSize=11, fontWeight="bold", color=TEXT_SECONDARY, dy=9,
     ).encode(text="title_label:N", tooltip=tooltip)
     # Scale endpoints, right at the two tips of the dome (the arc's left
     # tip is 0% and right tip is 100% by construction — that's what the
@@ -255,10 +260,10 @@ def gauge_chart(pct, actual, target, color, title, height=190):
     # earlier on the bullet charts' labels), but these are just static
     # scale markers, not data worth a tooltip at all.
     min_text = base.transform_filter(alt.datum.segment == "value").mark_text(
-        fontSize=12, color=TEXT_SECONDARY, dx=-103, dy=10,
+        fontSize=9, color=TEXT_SECONDARY, dx=-76, dy=8,
     ).encode(text="min_label:N", tooltip=alt.value(None))
     max_text = base.transform_filter(alt.datum.segment == "value").mark_text(
-        fontSize=12, color=TEXT_SECONDARY, dx=103, dy=10,
+        fontSize=9, color=TEXT_SECONDARY, dx=76, dy=8,
     ).encode(text="max_label:N", tooltip=alt.value(None))
     return (arc + pct_text + title_text + min_text + max_text).properties(height=height)
 
@@ -304,7 +309,7 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
 
     row2_left, row2_right = st.columns(2)
 
-    with row2_left, st.container(border=True):
+    with row2_left:
         st.markdown("**Sales by Channel**")
         by_client_type = won_ytd.groupby("client_type").deal_value.sum().reindex(list(CLIENT_TYPE_COLORS)).reset_index()
         by_client_type.columns = ["client_type", "revenue"]
@@ -340,10 +345,12 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
             use_container_width=True,
         )
 
-        # Channel targets, gauges below the pie in the SAME bordered
-        # container — that's what ties them together as one panel to
-        # read, rather than the gauges looking like an unrelated chart
-        # that happens to sit nearby. Targets come from the Finance tab's
+        # Channel targets, gauges below the pie in the SAME "Sales by
+        # Channel" panel (no divider or border between them — a bordered
+        # container was tried and dropped, it was the only panel on the
+        # tab with an outline and looked out of place) — the shared
+        # header and immediate proximity are what tie them together as
+        # one panel to read. Targets come from the Finance tab's
         # budget_institutional_revenue/budget_commercial_revenue (summed
         # over the year, same "sum the monthly column" pattern as every
         # other annual target on this tab), which in turn trace back to
