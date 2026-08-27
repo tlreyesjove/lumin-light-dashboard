@@ -7,9 +7,9 @@ Sales pillar, split into two sections per Tatiana's request:
   Commercial share, as a pie, with Product Mix — Sol 1-5 revenue, a bar
   chart since PRODUCT_COLORS is a 5-step ordinal ramp and 5 similar-blue
   pie wedges read far worse than 5 bars — underneath in the same
-  column) and Win/Loss Rate (a diverging bar, by deal count: won /
-  (won + lost), with the two channel-target gauges underneath in that
-  column instead) on the bottom.
+  column) and the two channel-target gauges with Win/Loss Rate (a
+  diverging bar, by deal count: won / (won + lost)) underneath, in the
+  other column, on the bottom.
 - Pipeline — what's still open, as 4 scorecards (Revenue Forecast /
   Weighted Pipeline, Open Deals, Avg. Sales Cycle, Avg. Order Value) plus
   a Revenue Forecast by Month chart (Open by expected close date vs. Won
@@ -26,7 +26,7 @@ budget_revenue — annual and quarterly totals are both just sums of that
 same column, not a separate number. Quarterly goals in particular now
 reflect the explicit 2026 quarterly target split (10/20/30/40) set in the
 financial model, not the old flat monthly seasonality curve — see
-Learning Doc 2.5. Channel targets (the two gauges under Win/Loss Rate)
+Learning Doc 2.5. Channel targets (the two gauges above Win/Loss Rate)
 work the same way, from budget_institutional_revenue/
 budget_commercial_revenue — 2026 only, since there's no channel target
 for a year that's already closed out.
@@ -389,6 +389,40 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
         st.altair_chart((product_bars + product_labels).properties(height=260), use_container_width=True)
 
     with row2_right:
+        # Channel target gauges sit on top, above Win/Loss Rate — Product
+        # Mix took their old spot under Booked by Channel, so this is
+        # where they landed instead. Targets come from the Finance tab's
+        # budget_institutional_revenue/budget_commercial_revenue (summed
+        # over the year, same "sum the monthly column" pattern as every
+        # other annual target on this tab), which in turn trace back to
+        # the Assumptions tab's Channel Revenue Target Split — not
+        # invented here.
+        channel_target = finance_df[finance_df.month.str.startswith(str(year))][
+            ["budget_institutional_revenue", "budget_commercial_revenue"]].sum()
+        target_institutional = channel_target["budget_institutional_revenue"]
+        target_commercial = channel_target["budget_commercial_revenue"]
+        actual_by_channel = by_client_type.set_index("client_type").revenue
+        actual_institutional = actual_by_channel.get("Institutional", 0)
+        actual_commercial = actual_by_channel.get("Commercial", 0)
+
+        # key= includes the rounded value, not just the entity — Streamlit
+        # otherwise sometimes tries to patch an existing gauge's Vega view
+        # in place across a rerun rather than fully remounting it, and that
+        # patch can fail silently (an "Unrecognized data set" console
+        # error, empty arc/text marks with no visible error in the UI).
+        # Keying on the value itself forces a clean remount whenever the
+        # numbers actually change, instead of patching.
+        pct_institutional = (actual_institutional / target_institutional) if target_institutional else 0
+        st.altair_chart(
+            gauge_chart(pct_institutional, actual_institutional, target_institutional, NAVY, "Institutional"),
+            use_container_width=True, key=f"gauge_institutional_{entity}_{pct_institutional:.4f}",
+        )
+        pct_commercial = (actual_commercial / target_commercial) if target_commercial else 0
+        st.altair_chart(
+            gauge_chart(pct_commercial, actual_commercial, target_commercial, AMBER, "Commercial"),
+            use_container_width=True, key=f"gauge_commercial_{entity}_{pct_commercial:.4f}",
+        )
+
         st.markdown("**Win/Loss Rate YTD**")
         # Scoped to the current year — won_deals/lost_deals on their own
         # are all-time (2025 + 2026 combined), which is why an earlier
@@ -432,40 +466,6 @@ def render(sales_df, finance_df, as_of, entity="Lumin Group Consolidated"):
             x=alt.X("label:N"), y=alt.Y("pct:Q"), text=alt.Text("pct:Q", format=".0%"), tooltip=wl_tooltip,
         )
         st.altair_chart((wl_chart + wl_labels).properties(height=260), use_container_width=True)
-
-        # Channel target gauges moved here, below Win/Loss Rate — Product
-        # Mix took their old spot under Booked by Channel, so this is
-        # where they landed instead. Targets come from the Finance tab's
-        # budget_institutional_revenue/budget_commercial_revenue (summed
-        # over the year, same "sum the monthly column" pattern as every
-        # other annual target on this tab), which in turn trace back to
-        # the Assumptions tab's Channel Revenue Target Split — not
-        # invented here.
-        channel_target = finance_df[finance_df.month.str.startswith(str(year))][
-            ["budget_institutional_revenue", "budget_commercial_revenue"]].sum()
-        target_institutional = channel_target["budget_institutional_revenue"]
-        target_commercial = channel_target["budget_commercial_revenue"]
-        actual_by_channel = by_client_type.set_index("client_type").revenue
-        actual_institutional = actual_by_channel.get("Institutional", 0)
-        actual_commercial = actual_by_channel.get("Commercial", 0)
-
-        # key= includes the rounded value, not just the entity — Streamlit
-        # otherwise sometimes tries to patch an existing gauge's Vega view
-        # in place across a rerun rather than fully remounting it, and that
-        # patch can fail silently (an "Unrecognized data set" console
-        # error, empty arc/text marks with no visible error in the UI).
-        # Keying on the value itself forces a clean remount whenever the
-        # numbers actually change, instead of patching.
-        pct_institutional = (actual_institutional / target_institutional) if target_institutional else 0
-        st.altair_chart(
-            gauge_chart(pct_institutional, actual_institutional, target_institutional, NAVY, "Institutional"),
-            use_container_width=True, key=f"gauge_institutional_{entity}_{pct_institutional:.4f}",
-        )
-        pct_commercial = (actual_commercial / target_commercial) if target_commercial else 0
-        st.altair_chart(
-            gauge_chart(pct_commercial, actual_commercial, target_commercial, AMBER, "Commercial"),
-            use_container_width=True, key=f"gauge_commercial_{entity}_{pct_commercial:.4f}",
-        )
 
     st.divider()
 
