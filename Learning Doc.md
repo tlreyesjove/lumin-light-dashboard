@@ -597,3 +597,62 @@ project) — but the fix is consistent with every other layered chart in
 this codebase already following the "one shared base dataset" pattern,
 which in hindsight was already the established convention here for a
 reason.
+
+### 3.5 — Rebuilding Finance: Recognized Revenue, and a real modeling bug
+
+Tatiana asked for a full redo of the Finance tab — a Financial Performance
+chart grid, a Cash & Risk KPI section, and an AR Aging Detail table,
+matching the exact shape of the Sales tab's own three sections. Most of
+the new charts turned out to already be one small step away from existing
+data: Gross Margin by Product Tier was already being computed (Sol 1-5
+margins already ramp ~35% -> 55%, the real premium/low-volume vs.
+low-cost/high-volume story Tatiana wanted, because `config.PRODUCTS`
+already modeled it that way); Cash Balance was already tracked monthly,
+just needed a trailing-12-month line chart instead of the old all-history
+area chart; EBITDA is just EBIT + D&A, and D&A was already being computed
+internally — it just needed to be exposed as its own column
+(`generate_finance.py`) instead of staying a local variable. Opex vs.
+Budget needed one real addition: a `budget_opex` column, built with the
+exact same cost-structure formula `generate_finance.py` already uses for
+actual opex, just fed `budget_revenue` instead of actual revenue for the
+commission term, and with no execution-variance noise (a plan doesn't
+have "noise" — that's what makes something an actual, not a budget).
+
+The one genuinely new concept — and the one that caused a real bug —
+was **Recognized Revenue**. Tatiana was specific: it needed to be a real,
+separate, LOWER number than Sales' "Booked YTD," because not every
+booked deal has been delivered and invoiced yet. That meant building
+actual invoice-level data for the first time: a new `generate_ar.py`,
+one invoice per Closed Won deal, with an issue date (a short lag after
+the deal closes — delivery/invoicing takes real time), a due date
+(net-30), and a payment date drawn from a distribution that's slower for
+Institutional buyers than Commercial — the same "institutional buyers
+pay slowly" story `config.AR_LAG_DAYS` already told elsewhere in this
+project, just finally given real teeth via invoice-level data instead of
+staying a comment. That same AR data is also what makes DSO and AR
+Overdue $ possible, and it's the direct source for the AR Aging Detail
+table.
+
+The first version defined "Recognized Revenue YTD" as: sum up every
+invoice whose ISSUE DATE falls in 2026. That seemed reasonable, but
+verifying it against Booked YTD (compute both, compare) caught a real
+problem — Recognized Revenue came out **higher** than Booked YTD, the
+opposite of what was asked for. The cause: this business's seasonality
+curve weights November and December the heaviest (year-end institutional
+budget flush), so a meaningful chunk of *2025's* December bookings get
+invoiced a few weeks into *2026* — dollars that were never part of 2026's
+bookings in the first place, inflating 2026's "recognized" total past
+2026's own booked total. Any fixed invoicing lag will always have this
+same boundary effect at a year change; the fix wasn't a bigger or smaller
+lag, it was scoping by the wrong thing. The corrected version scopes
+Recognized Revenue to the SAME cohort of deals as Booked YTD (deals whose
+actual_close_date falls in the year in question), and only counts the
+portion of that cohort already invoiced as of today (`issue_date <=
+as_of`). That makes Recognized Revenue a guaranteed subset of Booked —
+always less than or equal, never more — which is what "not every booked
+deal has been invoiced yet" actually means. **General lesson worth
+keeping:** whenever a new number is supposed to relate to an existing one
+in a specific way ("always lower," "always a subset of"), verify that
+relationship holds on real generated data before trusting the chart —
+the code can run cleanly and still produce a number that's directionally
+backwards.

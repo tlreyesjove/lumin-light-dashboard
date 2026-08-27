@@ -42,7 +42,7 @@ except Exception as e:
     )
     st.stop()
 
-sales_df, finance_df, inventory_df = data["sales"], data["finance"], data["inventory"]
+sales_df, finance_df, inventory_df, ar_df = data["sales"], data["finance"], data["inventory"], data["ar"]
 as_of = pd.to_datetime(inventory_df["as_of_date"].max())
 
 render_header(f"Data as of {as_of.strftime('%B %-d, %Y')}")
@@ -73,7 +73,9 @@ def filter_by_entity(df):
     return df[df.subsidiary == entity]
 
 
-sales_df, finance_df, inventory_df = filter_by_entity(sales_df), filter_by_entity(finance_df), filter_by_entity(inventory_df)
+sales_df, finance_df, inventory_df, ar_df = (
+    filter_by_entity(sales_df), filter_by_entity(finance_df), filter_by_entity(inventory_df), filter_by_entity(ar_df)
+)
 
 tab_sales, tab_finance, tab_inventory = st.tabs(["Sales", "Finance", "Inventory"])
 
@@ -81,7 +83,7 @@ with tab_sales:
     sales_page.render(sales_df, finance_df, as_of, entity)
 
 with tab_finance:
-    finance_page.render(sales_df, finance_df, as_of)
+    finance_page.render(sales_df, finance_df, ar_df, as_of)
 
 with tab_inventory:
     inventory_page.render(sales_df, inventory_df, as_of)

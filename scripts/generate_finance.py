@@ -112,8 +112,8 @@ def generate_finance_data(sales_df=None):
     df["opex"] = computed_opex.where(happened).round(2)  # NaN for months that haven't happened
 
     da_monthly = df.apply(lambda r: cost["da"][r["subsidiary"]] / 12, axis=1)
+    df["da"] = da_monthly.round(2)  # exposed as its own column so EBITDA (EBIT + D&A) can be computed downstream
     df["ebit"] = (df["revenue"] - df["cogs"] - df["opex"] - da_monthly).where(happened).round(2)
-    df = df.drop(columns=["year"])
 
     # budget_revenue/budget_ebit ARE populated for every month, including
     # ones that haven't happened yet — that's the whole point. Pulled from
@@ -122,6 +122,26 @@ def generate_finance_data(sales_df=None):
     monthly_budget = config.read_monthly_budget()
     df["budget_revenue"] = df.apply(lambda r: monthly_budget[(r["subsidiary"], r["month"])]["budget_revenue"], axis=1)
     df["budget_ebit"] = df.apply(lambda r: monthly_budget[(r["subsidiary"], r["month"])]["budget_ebit"], axis=1)
+
+    # Budgeted Opex: the SAME cost-structure formula as actual opex above
+    # (salaries + inflated other-opex + revenue-scaled commission) — not a
+    # separate guess — but built from budget_revenue instead of actual
+    # revenue (a plan can't know what revenue will actually land), and with
+    # no execution-variance noise (that's what makes an actual an actual).
+    # Populated for the full year like every other budget_* column, so
+    # "Opex vs. Budget" can sum matching months on both sides exactly the
+    # way the Revenue Actual-vs-Budget chart already does.
+    def budget_monthly_opex(row):
+        sub, year = row["subsidiary"], row["year"]
+        salaries = cost["headcount_base"][sub][year] * (1 + cost["benefits_loading"]) / 12
+        commission = row["budget_revenue"] * cost["commission_pct"]
+        other_annual = cost["other_opex_2025_annual"][sub]
+        if year == 2026:
+            other_annual *= (1 + cost["inflation"])
+        return salaries + commission + other_annual / 12
+
+    df["budget_opex"] = df.apply(budget_monthly_opex, axis=1).round(2)
+    df = df.drop(columns=["year"])
 
     # Channel (Institutional/Commercial) revenue targets — same "read the
     # ANNUAL number, spread it flat across 12 months" approach as the rest

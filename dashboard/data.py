@@ -22,7 +22,7 @@ from google.oauth2.service_account import Credentials
 load_dotenv()
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-TABS = ["Sales", "Finance", "Inventory"]
+TABS = ["Sales", "Finance", "Inventory", "AR"]
 
 
 @st.cache_resource
@@ -53,7 +53,7 @@ def load_data():
     sales["actual_close_date"] = pd.to_datetime(sales["actual_close_date"], errors="coerce")
 
     finance = data["finance"]
-    for col in ["revenue", "cogs", "opex", "ebit", "budget_revenue", "budget_ebit",
+    for col in ["revenue", "cogs", "opex", "da", "ebit", "budget_revenue", "budget_ebit", "budget_opex",
                 "budget_institutional_revenue", "budget_commercial_revenue",
                 "net_cash_change", "cash_balance"]:
         finance[col] = pd.to_numeric(finance[col], errors="coerce")
@@ -63,7 +63,16 @@ def load_data():
                 "safety_stock", "reorder_point"]:
         inventory[col] = pd.to_numeric(inventory[col], errors="coerce")
 
-    return {"sales": sales, "finance": finance, "inventory": inventory}
+    ar = data["ar"]
+    ar["amount"] = pd.to_numeric(ar["amount"], errors="coerce")
+    ar["days_overdue"] = pd.to_numeric(ar["days_overdue"], errors="coerce")
+    for col in ["actual_close_date", "issue_date", "due_date"]:
+        ar[col] = pd.to_datetime(ar[col], errors="coerce")
+    # paid_date is genuinely blank for outstanding invoices (Current/Overdue)
+    # — errors="coerce" turns that blank string into NaT rather than raising.
+    ar["paid_date"] = pd.to_datetime(ar["paid_date"], errors="coerce")
+
+    return {"sales": sales, "finance": finance, "inventory": inventory, "ar": ar}
 
 
 def refresh():

@@ -35,6 +35,7 @@ TABS = {
     "Sales": "sales.csv",
     "Finance": "finance.csv",
     "Inventory": "inventory.csv",
+    "AR": "ar.csv",
 }
 
 

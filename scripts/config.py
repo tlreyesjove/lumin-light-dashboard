@@ -278,6 +278,29 @@ STARTING_CASH_BALANCE = 2_200_000    # cash balance at PRIOR_PERIOD_START
 AR_LAG_DAYS = 35                     # institutional buyers pay slowly — cash lags revenue
 
 # ---------------------------------------------------------------------------
+# Accounts Receivable / Invoicing (generate_ar.py)
+# ---------------------------------------------------------------------------
+# One invoice per Closed Won deal. Revenue is treated as RECOGNIZED when an
+# invoice is ISSUED, not when the deal is booked (Won) — that's what makes
+# "Recognized Revenue" on the Finance tab a genuinely different, slightly
+# lower number than "Booked YTD" on the Sales tab: the tail end of this
+# month's bookings won't be invoiced (and so won't be recognized) until
+# next month.
+INVOICE_LAG_DAYS_RANGE = (20, 60)    # deal closes -> invoice issued (delivery/commissioning takes real time)
+PAYMENT_TERMS_DAYS = 30              # net-30 on every invoice, regardless of client type
+
+# How long a customer actually takes to pay, counted from ISSUE date (not
+# due date) — this is what determines whether they end up overdue against
+# the 30-day terms above, not a separate on-time/late flag. Institutional
+# buyers' average sits above AR_LAG_DAYS (35) precisely because they're
+# the slow payers that constant already describes; Commercial buyers pay
+# close to terms. (mean, std_dev) for a normal draw, floored at 5 days.
+PAYMENT_LAG_DAYS = {
+    "Institutional": (80, 25),
+    "Commercial": (35, 12),
+}
+
+# ---------------------------------------------------------------------------
 # Inventory
 # ---------------------------------------------------------------------------
 # Lead time = how long it takes to receive a replenishment order (e.g. an

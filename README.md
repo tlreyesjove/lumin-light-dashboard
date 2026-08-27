@@ -71,7 +71,7 @@ source .venv/bin/activate
 python3 scripts/push_to_sheets.py
 ```
 
-You should see three tabs appear in your Google Sheet: Sales, Finance, Inventory.
+You should see four tabs appear in your Google Sheet: Sales, Finance, Inventory, AR.
 
 Both `.env` and `credentials/service_account.json` are gitignored — they never
 get committed, since they're specific to your Google account.
