@@ -183,7 +183,6 @@ def render(sales_df, inventory_df, ar_df, as_of):
 
     st.divider()
     st.markdown("**Sales in Fulfillment**")
-    st.caption("Closed Won deals not yet delivered — delivery_status on the AR tab, separate from payment status.")
     in_fulfillment = ar_df[ar_df.delivery_status == "Open"].sort_values("actual_close_date")
 
     ful_col1, ful_col2 = st.columns(2)
