@@ -25,17 +25,44 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 TABS = ["Sales", "Finance", "Inventory", "AR"]
 
 
+def _local_secrets():
+    """Streamlit's own st.secrets, or {} if none is configured. st.secrets
+    is lazy — merely referencing it doesn't raise, it only actually tries
+    to find/parse a secrets.toml the moment something queries it (`in`,
+    indexing, .get()). So catching the "no secrets file" error means
+    forcing that lookup INSIDE the try (dict(...) iterates it fully),
+    not just wrapping the bare reference to st.secrets itself."""
+    try:
+        return dict(st.secrets)
+    except Exception:
+        return {}
+
+
 @st.cache_resource
 def get_client():
-    key_path = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE")
-    creds = Credentials.from_service_account_file(key_path, scopes=SCOPES)
+    # Two ways to supply credentials, tried in order:
+    # 1. Streamlit's own Secrets — how this works once deployed on
+    #    Streamlit Community Cloud, where there's no local file system to
+    #    put a JSON key on. The [gcp_service_account] table in Secrets is
+    #    just the contents of credentials/service_account.json, pasted in
+    #    as TOML instead of JSON.
+    # 2. The local .env + credentials/service_account.json file — how
+    #    every prior run of this app during development has worked. Left
+    #    as the fallback so local development (no secrets.toml at all) is
+    #    completely unaffected by this change.
+    secrets = _local_secrets()
+    if "gcp_service_account" in secrets:
+        creds = Credentials.from_service_account_info(dict(secrets["gcp_service_account"]), scopes=SCOPES)
+    else:
+        key_path = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE")
+        creds = Credentials.from_service_account_file(key_path, scopes=SCOPES)
     return gspread.authorize(creds)
 
 
 @st.cache_data
 def load_data():
     client = get_client()
-    sheet_id = os.getenv("GOOGLE_SHEET_ID")
+    sheet_id = _local_secrets().get("GOOGLE_SHEET_ID", os.getenv("GOOGLE_SHEET_ID"))
     spreadsheet = client.open_by_key(sheet_id)
 
     data = {}

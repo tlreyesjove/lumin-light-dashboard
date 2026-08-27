@@ -3,7 +3,7 @@
 Personal portfolio project: a synthetic-data leadership dashboard for a fictional
 B2B solar lighting company. See `Lumin Light Project Spec.md` for the full plan.
 
-**Status: Phase 1 — synthetic data generation.** (Streamlit dashboard is Phase 3, not built yet.)
+**Status: dashboard built and running locally.** Next up: deploy it (see below).
 
 ## What's here so far
 
@@ -75,3 +75,43 @@ You should see four tabs appear in your Google Sheet: Sales, Finance, Inventory,
 
 Both `.env` and `credentials/service_account.json` are gitignored — they never
 get committed, since they're specific to your Google account.
+
+## Deploying to Streamlit Community Cloud
+
+The app reads its Google credentials two ways: from Streamlit's own **Secrets**
+if they're set (how this works once deployed — there's no local file system on
+Streamlit Cloud to hold `credentials/service_account.json`), otherwise from the
+local `.env` + file setup above. Locally, nothing changes — you don't need to
+do anything differently for development.
+
+**1. Push this repo to GitHub** (a public or private repo both work).
+
+**2. Go to [share.streamlit.io](https://share.streamlit.io)** and sign in with
+GitHub. Click **New app**, pick this repo, and set the main file path to `app.py`.
+
+**3. Before deploying, add your Secrets** (under "Advanced settings" on the
+deploy screen, or later via the app's **Settings → Secrets**). Paste in:
+
+```toml
+GOOGLE_SHEET_ID = "your-sheet-id-here"
+
+[gcp_service_account]
+type = "service_account"
+project_id = "..."
+private_key_id = "..."
+private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+client_email = "...@....iam.gserviceaccount.com"
+client_id = "..."
+auth_uri = "https://accounts.google.com/o/oauth2/auth"
+token_uri = "https://oauth2.googleapis.com/token"
+auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+client_x509_cert_url = "..."
+```
+
+Every one of those `[gcp_service_account]` values is already sitting in your
+local `credentials/service_account.json` — just copy each field across (it's
+JSON there, TOML here, but the field names are identical). The Sheet also
+needs to already be shared with that service account's email as an Editor,
+same as in the local setup above.
+
+**4. Click Deploy.**
