@@ -167,16 +167,31 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=
     # falls back to Altair's default tooltip, dumping every encoded field
     # verbatim — including internal helper columns like goal_label_color,
     # which mean nothing to a viewer.
-    goal_labels = base.mark_text(dy=-10, fontWeight="bold", fontSize=11).encode(
+    # Split into two layers, same reason as the actual-label split below:
+    # dy is a fixed mark property, not something that can vary per row.
+    # Normal case (goal_label sits above everything, nothing to collide
+    # with) keeps the original dy=-10 nudge up. Exceeded case nudges DOWN
+    # instead (dy=+12) — goal_label_y is already sitting inline inside
+    # the taller actual bar there, and when goal and actual are close in
+    # value (e.g. Nigeria Q2: $1.2M goal vs. $1.3M actual), nudging up
+    # would land it almost exactly where the actual label (also nudged
+    # up, from a nearby height) already is — the two overlapped into
+    # unreadable garbled text. Nudging down instead guarantees clearance
+    # from whatever's above it, regardless of how close the two values are.
+    goal_labels_normal = base.transform_filter(alt.datum.actual_inside_bar).mark_text(
+        dy=-10, fontWeight="bold", fontSize=11,
+    ).encode(
         x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("goal_label_y:Q", scale=y_scale), text=alt.Text("goal_label:N"),
         color=alt.Color("goal_label_color:N", scale=None, legend=None),
         tooltip=tooltip,
     )
-    # Split into two layers rather than one, because the two cases need a
-    # different dy (pixel nudge) — dy is a fixed mark property in
-    # Vega-Lite, not something that can vary per row within one mark, so
-    # "centered inside the bar" (dy=0) and "nudged above the bar" (dy=-10,
-    # same treatment as goal_label) each need their own mark_text call.
+    goal_labels_exceeded = base.transform_filter(~alt.datum.actual_inside_bar).mark_text(
+        dy=12, fontWeight="bold", fontSize=11,
+    ).encode(
+        x=alt.X(f"{x_field}:N", sort=x_sort), y=alt.Y("goal_label_y:Q", scale=y_scale), text=alt.Text("goal_label:N"),
+        color=alt.Color("goal_label_color:N", scale=None, legend=None),
+        tooltip=tooltip,
+    )
     actual_labels_inside = base.transform_filter(alt.datum.actual_inside_bar).mark_text(
         fontWeight="bold", fontSize=11,
     ).encode(
@@ -191,7 +206,8 @@ def bullet_chart(df, x_field, x_title, actual_color, height, x_sort=None, y_max=
         color=alt.Color("actual_label_color:N", scale=None, legend=None),
         tooltip=tooltip,
     )
-    return (goal_bars + actual_bars + goal_labels + actual_labels_inside + actual_labels_outside).properties(height=height)
+    return (goal_bars + actual_bars + goal_labels_normal + goal_labels_exceeded
+            + actual_labels_inside + actual_labels_outside).properties(height=height)
 
 
 def gauge_chart(pct, actual, target, color, title, height=140):
