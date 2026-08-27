@@ -4,5 +4,5 @@ gspread
 google-auth
 python-dotenv
 openpyxl
-streamlit
+streamlit==1.50.0
 altair
