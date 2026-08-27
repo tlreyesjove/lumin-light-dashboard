@@ -15,6 +15,7 @@ Usage:
     python3 push_to_sheets.py
 """
 
+import datetime
 import os
 import sys
 
@@ -57,6 +58,18 @@ def push_tab(spreadsheet, tab_name, csv_filename):
         sys.exit(f"Missing {csv_path} — run generate_data.py first.")
 
     df = pd.read_csv(csv_path)
+
+    # The dashboard's "Data as of" header (and every date-based calculation
+    # in the app) reads Inventory's as_of_date — it's meant to mean "the
+    # last time this Sheet was actually refreshed," the way a real Zapier
+    # sync would stamp its own run date. So this push, the one thing that
+    # actually moves fresh data into the Sheet, is what advances it — not
+    # generate_data.py's fixed simulation date, and not the real clock on
+    # every page load (which would make YTD/reorder calculations silently
+    # shift every day even with no new data).
+    if tab_name == "Inventory":
+        df["as_of_date"] = datetime.date.today().isoformat()
+        df.to_csv(csv_path, index=False)
 
     try:
         worksheet = spreadsheet.worksheet(tab_name)

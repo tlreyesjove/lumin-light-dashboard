@@ -184,13 +184,17 @@ def render(sales_df, inventory_df, ar_df, as_of):
     st.divider()
     st.markdown("**Sales in Fulfillment**")
     in_fulfillment = ar_df[ar_df.delivery_status == "Open"].sort_values("actual_close_date")
+    # ar_df has dollar amount but not unit quantity — that lives on the
+    # deal itself, so pull it in via deal_id rather than duplicating it
+    # into the AR generator just for this one table.
+    in_fulfillment = in_fulfillment.merge(sales_df[["deal_id", "quantity"]], on="deal_id", how="left")
 
     ful_col1, ful_col2 = st.columns(2)
     ful_col1.metric("Deals in Fulfillment", f"{len(in_fulfillment):,}")
     ful_col2.metric("Value in Fulfillment", f"${in_fulfillment.amount.sum():,.0f}")
 
     ful_display_cols = ["invoice_id", "subsidiary", "buyer_type", "buyer_name", "product",
-                         "amount", "actual_close_date"]
+                         "quantity", "amount", "actual_close_date"]
     st.dataframe(
         in_fulfillment[ful_display_cols],
         use_container_width=True, hide_index=True,
@@ -200,6 +204,7 @@ def render(sales_df, inventory_df, ar_df, as_of):
             "buyer_type": st.column_config.TextColumn("Customer Category"),
             "buyer_name": st.column_config.TextColumn("Customer"),
             "product": st.column_config.TextColumn("Product"),
+            "quantity": st.column_config.NumberColumn("Units", format="localized"),
             "amount": st.column_config.NumberColumn("Amount", format="dollar", step=1),
             "actual_close_date": st.column_config.DateColumn("Closed On"),
         },
